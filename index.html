@@ -376,6 +376,7 @@
   </div>
 </div>
 
+<script src="supabase.js?v=1"></script>
 <script>
 /* ================= ข้อมูลไพ่ ================= */
 var SUITS = [
@@ -413,7 +414,16 @@ var turnLeft = 12, turnTimerId = null;
 var TURN_SECONDS = 12;
 var handDealAnim = false;   // แจกไพ่แอนิเมชันรอบเดียวตอนเริ่มรอบ
 var lastTableKey = '';      // กันไพ่บนโต๊ะแอนิเมชันซ้ำทุกครั้งที่ render
-var myId = 'me-' + Math.random().toString(36).slice(2,8);
+var GAME_VERSION = 'v5';
+var myId = (function(){
+  try{
+    var v = sessionStorage.getItem('slave_myid_v1');
+    if(v) return v;
+    var n = 'me-' + Math.random().toString(36).slice(2,8);
+    sessionStorage.setItem('slave_myid_v1', n);
+    return n;
+  }catch(e){ return 'me-' + Math.random().toString(36).slice(2,8); }
+})();
 var myName = '';
 var room = null;            // {code, max, seats:[{id,name,bot}], hostId}
 var lobbyCount = 4;
@@ -467,21 +477,168 @@ function initLobbyCounts(){
   });
   $('lobby-hint').textContent = 'แต่ละคนได้ ' + HAND_SIZE[lobbyCount] + ' ใบ · ที่เหลือเป็นไพ่สำรอง';
 }
-var memRooms = null;
-function storeGet(){
-  if(memRooms!==null) return memRooms;
-  try { memRooms = localStorage.getItem('slave_rooms_v1') || '[]'; }
-  catch(e){ memRooms = '[]'; }
-  return memRooms;
+/* ================= ที่เก็บข้อมูลห้อง (localStorage + BroadcastChannel / Supabase) ================= */
+var ROOMS = {};
+var ROOM_KEY = 'slave_rooms_v2';
+var SUPABASE_ON = false;
+var sb = null;
+var myIdx = 0;
+var LOG = [];
+var botTimerId = null;
+
+function roomsLoad(){
+  try {
+    var o = JSON.parse(localStorage.getItem(ROOM_KEY)||'{}');
+    ROOMS = (o && o.rooms) ? o.rooms : {};
+  } catch(e){ ROOMS = {}; }
+  return ROOMS;
 }
-function storeSet(v){
-  memRooms = v;
-  try { localStorage.setItem('slave_rooms_v1', v); } catch(e){}
+function roomsWrite(){
+  try { localStorage.setItem(ROOM_KEY, JSON.stringify({rooms:ROOMS, t:Date.now()})); return true; }
+  catch(e){ return false; }
 }
 function readRooms(){
-  try { var r = JSON.parse(storeGet()); return Array.isArray(r)?r:[]; } catch(e){ return []; }
+  var out = [];
+  for(var k in ROOMS){ var r = ROOMS[k]; if(r && !r.private) out.push(r); }
+  return out;
 }
-function writeRooms(list){ storeSet(JSON.stringify(list)); }
+function getRoom(code){ return ROOMS[code] || null; }
+function freshRoom(code){
+  if(SUPABASE_ON) return ROOMS[code] || null;
+  roomsLoad();
+  return getRoom(code);
+}
+
+function snapshotGame(){
+  return {
+    roundNo: roundNo,
+    phase: gameActive ? 'play' : 'roundover',
+    players: players.map(function(p){
+      return {id:p.id, name:p.name, bot:!!p.bot, hand:p.hand, played:p.played||0,
+              rank:(p.rank===null||p.rank===undefined)?null:p.rank, wins:p.wins||0, score:p.score||0,
+              lastPlay:p.lastPlay||null};
+    }),
+    stock: stock, deck: deck, table: table,
+    turn: currentTurn, last: lastPlayer, passStreak: passStreak,
+    allowPlus2: allowPlus2,
+    log: LOG.slice(-60)
+  };
+}
+function restoreGame(g){
+  if(!g) return;
+  roundNo = g.roundNo||1;
+  gameActive = (g.phase!=='roundover');
+  players = (g.players||[]).map(function(p){
+    return {id:p.id, name:p.name, bot:!!p.bot, hand:p.hand||[], played:p.played||0,
+            rank:(p.rank===null||p.rank===undefined)?null:p.rank, wins:p.wins||0, score:p.score||0,
+            lastPlay:p.lastPlay||null};
+  });
+  stock = g.stock||[]; deck = g.deck||[]; table = g.table||null;
+  currentTurn = g.turn||0;
+  lastPlayer = (g.last===null||g.last===undefined)?-1:g.last;
+  passStreak = g.passStreak||0;
+  allowPlus2 = (g.allowPlus2!==false);
+  LOG = g.log||[];
+  myIdx = 0;
+  for(var i=0;i<players.length;i++) if(players[i].id===myId){ myIdx=i; break; }
+  handDealAnim = false; lastTableKey = '';
+  renderLog();
+}
+
+function saveRoom(rm){
+  var r = rm || room;
+  if(!r) return;
+  r.updatedAt = Date.now();
+  ROOMS[r.code] = r;
+  if(SUPABASE_ON && sb){ supaSave(r); }
+  else {
+    r.v = (r.v||0)+1;
+    roomsWrite();
+    broadcast({type:'state', code:r.code, v:r.v, room:r});
+  }
+}
+function commitGame(){
+  if(!room) return;
+  if(!SUPABASE_ON){
+    var cur = freshRoom(room.code);
+    if(cur && (cur.v||0) > (room.v||0)){ applyRoomState(cur); return; }
+  }
+  room.game = snapshotGame();
+  saveRoom(room);
+}
+
+function applyRoomState(r){
+  if(!r || !room || r.code!==room.code) return;
+  room = r; ROOMS[r.code] = r;
+  if(r.game && r.game.players && r.game.players.length){
+    restoreGame(r.game);
+    if(gameActive){ closeRoundModal(); showScreen('screen-game'); syncTurn(); }
+    else { renderRoundModal(); render(); }
+  } else {
+    var rs = $('screen-room');
+    if(rs && !rs.classList.contains('hidden')) renderRoom();
+  }
+}
+/* ================= Supabase (ข้ามเครื่อง) ================= */
+var SB_URL = 'https://dbtlbeymrchodloboymr.supabase.co';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRidGxiZXltcmNob2Rsb2JveW1yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1MTIxNTksImV4cCI6MjEwNzA4ODE1OX0.HHqLCDj3_rEAeGQxs-Yz8eX-xJG0VbMbYWIELC6LYbc';
+function bootSupabase(){
+  if(typeof supabase==='undefined' || !supabase.createClient){ setNetStatus(false); return; }
+  try { sb = supabase.createClient(SB_URL, SB_KEY); } catch(e){ sb = null; }
+  if(!sb){ setNetStatus(false); return; }
+  try{
+    var q = sb.from('slave_card_rooms').select('code').limit(1);
+    if(q && typeof q.then==='function'){
+      q.then(function(res){
+        if(res && res.error){ setNetStatus(false); return; }
+        SUPABASE_ON = true; setNetStatus(true);
+        sbPull();
+        setInterval(sbPull, 2000);
+      }).catch(function(){ setNetStatus(false); });
+    } else { setNetStatus(false); }
+  }catch(e){ setNetStatus(false); }
+}
+function setNetStatus(on){
+  var el = $('net-status');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'net-status';
+    el.className = 'text-[11px] px-2 py-1 rounded-lg bg-black/30 border border-emerald-700/40 text-emerald-200 mb-2';
+    var lobby = $('screen-lobby');
+    if(lobby && lobby.firstChild) lobby.insertBefore(el, lobby.firstChild);
+  }
+  el.textContent = (on ? 'ออนไลน์ - เล่นข้ามเครื่องได้' : 'ออฟไลน์ - เล่นในเครื่องนี้เท่านั้น') + ' ' + GAME_VERSION;
+}
+async function sbPull(){
+  if(!sb || !SUPABASE_ON) return;
+  try{
+    var res = await sb.from('slave_card_rooms').select('code, room, v');
+    if(res.error) return;
+    var map = {};
+    (res.data||[]).forEach(function(row){
+      var r = row.room; if(!r) return;
+      r.code = row.code; r.v = row.v;
+      map[row.code] = r;
+    });
+    ROOMS = map;
+    if(room && map[room.code] && map[room.code].v !== room.v) applyRoomState(map[room.code]);
+    renderRoomList();
+    var rs = $('screen-room');
+    if(room && rs && !rs.classList.contains('hidden')) renderRoom();
+  }catch(e){}
+}
+async function supaSave(r){
+  if(!sb) return;
+  try{
+    var payload = {};
+    for(var k in r) payload[k] = r[k];
+    var res = await sb.rpc('slave_card_upsert', {p_code:r.code, p_room:payload, p_expected_v:(r.v||1)});
+    if(res.error){ return; }
+    var d = res.data||{};
+    if(d && d.ok){ if(d.v) r.v = d.v; return; }
+    if(d && d.conflict){ sbPull(); }
+  }catch(e){}
+}
 function makeCode(){
   var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', out = '';
   for(var i=0;i<6;i++) out += chars[Math.floor(Math.random()*chars.length)];
@@ -490,60 +647,72 @@ function makeCode(){
 function createRoom(){ requireAgree(createRoomNow); }
 function createRoomNow(){
   myName = ($('inp-name').value || '').trim() || 'ผู้เล่น';
-  var list = readRooms();
   var code = makeCode();
-  while(list.some(function(r){ return r.code===code; })) code = makeCode();
-  room = {code:code, max:lobbyCount, hostId:myId, seats:[{id:myId, name:myName, bot:false}]};
-  list.push(room); writeRooms(list);
-  broadcast({type:'rooms'});
+  while(getRoom(code)) code = makeCode();
+  room = {code:code, max:lobbyCount, hostId:myId, status:'lobby', v:0,
+          seats:[{id:myId, name:myName, bot:false}]};
+  saveRoom(room);
+  try{ sessionStorage.setItem('slave_room_v1', room.code); }catch(e){}
   renderRoom(); showScreen('screen-room');
 }
-function joinRoom(code){
+async function joinRoom(code){
   code = (code || ($('inp-code').value||'')).trim().toUpperCase();
   if(!code){ toast('ใส่รหัสห้อง'); return; }
-  var list = readRooms();
-  var found = null;
-  for(var i=0;i<list.length;i++) if(list[i].code===code) found = list[i];
+  if(SUPABASE_ON){ await sbPull(); } else { roomsLoad(); }
+  var found = getRoom(code);
   if(!found){ toast('ไม่พบห้องรหัสนี้'); return; }
   myName = ($('inp-name').value || '').trim() || 'ผู้เล่น';
   if(found.seats.some(function(s){ return s.id===myId; })) found.seats = found.seats.filter(function(s){ return s.id!==myId; });
   if(found.seats.length >= found.max){ toast('ห้องเต็มแล้ว'); return; }
   found.seats.push({id:myId, name:myName, bot:false});
   room = found;
-  writeRooms(list);
-  broadcast({type:'rooms'});
+  saveRoom(found);
+  try{ sessionStorage.setItem('slave_room_v1', room.code); }catch(e){}
   renderRoom(); showScreen('screen-room');
 }
 function quickPlay(){ requireAgree(quickPlayNow); }
 function quickPlayNow(){
   myName = ($('inp-name').value || '').trim() || 'ผู้เล่น';
-  room = {code:'SOLO', max:lobbyCount, hostId:myId, seats:[{id:myId, name:myName, bot:false}]};
+  room = {code:'SOLO-'+myId, max:lobbyCount, hostId:myId, status:'lobby', v:0, private:true,
+          seats:[{id:myId, name:myName, bot:false}]};
+  saveRoom(room);
+  try{ sessionStorage.setItem('slave_room_v1', room.code); }catch(e){}
   fillBots();
   startGame();
 }
 function fillBots(){
   if(!room) return room;
+  room = freshRoom(room.code) || room;
   var bi = 0;
   while(room.seats.length < room.max){
     room.seats.push({id:'bot-'+room.seats.length+'-'+Date.now(), name:BOT_NAMES[bi % BOT_NAMES.length], bot:true});
     bi++;
   }
+  saveRoom(room);
   renderRoom();
 }
 function addBot(){
   if(!room) return;
+  room = freshRoom(room.code) || room;
   if(room.seats.length >= room.max){ toast('ห้องเต็มแล้ว'); return; }
   room.seats.push({id:'bot-'+room.seats.length+'-'+Date.now(), name:BOT_NAMES[(room.seats.length-1) % BOT_NAMES.length], bot:true});
+  saveRoom(room);
   renderRoom();
 }
 function leaveRoom(){
   if(room){
-    var list = readRooms();
-    list.forEach(function(r){ if(r.code===room.code) r.seats = r.seats.filter(function(s){ return s.id!==myId; }); });
-    writeRooms(list);
+    var r = freshRoom(room.code);
+    if(r){
+      r.seats = r.seats.filter(function(s){ return s.id!==myId; });
+      if(r.hostId===myId && r.seats.length) r.hostId = r.seats[0].id;
+      if(!r.seats.length){ delete ROOMS[r.code]; roomsWrite(); }
+      else saveRoom(r);
+    }
     broadcast({type:'rooms'});
   }
+  gameActive = false; stopTimer();
   room = null;
+  try{ sessionStorage.removeItem('slave_room_v1'); }catch(e){}
   showScreen('screen-lobby'); renderRoomList();
 }
 function backToLobby(){
@@ -591,7 +760,7 @@ function renderRoom(){
 }
 function renderRoomList(){
   var box = $('room-list'); if(!box) return;
-  var list = readRooms().filter(function(r){ return r.seats.length < r.max; });
+  var list = readRooms().filter(function(r){ return r.seats.length < r.max && r.status!=='playing'; });
   box.innerHTML = '';
   if(!list.length){ box.innerHTML = '<div class="text-[11px] text-emerald-300/50 italic">ยังไม่มีห้องที่เปิดอยู่</div>'; return; }
   list.forEach(function(r){
@@ -752,7 +921,7 @@ function aiChoose(){
   return pool[0];
 }
 function bestPlayerSet(){
-  var legal = legalSets(players[0].hand);
+  var legal = legalSets(players[myIdx].hand);
   if(!legal.length) return null;
   if(!table){
     var best = null;
@@ -768,19 +937,27 @@ function bestPlayerSet(){
 
 /* ================= เกม ================= */
 function startGame(){
+  if(room && !SUPABASE_ON){ room = freshRoom(room.code) || room; }
   if(!room){
     var n = lobbyCount || 4;
-    room = {code:'SOLO', max:n, hostId:myId, seats:[{id:myId, name:myName||'ผู้เล่น', bot:false}]};
+    room = {code:'SOLO-'+myId, max:n, hostId:myId, status:'lobby', v:0, private:true,
+            seats:[{id:myId, name:myName||'ผู้เล่น', bot:false}]};
+    saveRoom(room);
     fillBots();
   }
   if(room.seats.length < room.max) fillBots();
-  players = room.seats.map(function(s, i){
-    return {id:s.id, name:s.name, bot:!!s.bot, human:s.id===myId, hand:[], played:0, rank:null, wins:0, score:0};
+  if(room.game && room.game.players && room.game.players.length){
+    restoreGame(room.game);
+    showScreen('screen-game');
+    syncTurn();
+    return;
+  }
+  players = room.seats.map(function(s){
+    return {id:s.id, name:s.name, bot:!!s.bot, hand:[], played:0, rank:null, wins:0, score:0};
   });
-  // เรียงลำดับ: คุณอยู่ล่างกลาง คนอื่นเรียงทวนเข็มนาฬิกา
-  var meIdx = players.findIndex(function(p){ return p.human; });
-  if(meIdx<0) meIdx = 0;
-  players = [players[meIdx]].concat(players.filter(function(_,i){ return i!==meIdx; }));
+  myIdx = 0;
+  for(var i=0;i<players.length;i++) if(players[i].id===myId){ myIdx=i; break; }
+  room.status = 'playing';
   showScreen('screen-game');
   roundNo = 1;
   players.forEach(function(p){ p.wins=0; p.score=0; });
@@ -807,6 +984,7 @@ function startRound(){
   currentTurn = starter;
   addLog('รอบที่ '+roundNo+' · แจกไพ่คนละ '+per+' ใบ ('+players.length+' คน, ไพ่สำรอง '+stock.length+' ใบ) · '+players[starter].name+' ถือ ♣3 เริ่มก่อน');
   $('h-round').textContent = roundNo;
+  commitGame();
   render(); startTurn();
 }
 function playCards(idx, set){
@@ -851,6 +1029,7 @@ function nextTurn(){
     currentTurn = leader;
   }
   selected = [];
+  commitGame();
   render(); startTurn();
 }
 function startTurn(){
@@ -861,10 +1040,28 @@ function startTurn(){
   turnLeft = TURN_SECONDS;
   updateTurnBar();
   render();
-  if(p.human){
+  if(p.id===myId){
     turnTimerId = setInterval(tick, 100);
-  } else {
-    setTimeout(function(){ aiAct(currentTurn); }, 700);
+  } else if(p.bot && iAmDriver()){
+    if(botTimerId) clearTimeout(botTimerId);
+    botTimerId = setTimeout(function(){ botTimerId=null; if(gameActive && players[currentTurn] && players[currentTurn].bot) aiAct(currentTurn); }, 700);
+  }
+}
+function iAmDriver(){
+  if(!room) return true;
+  return room.hostId===myId;
+}
+function syncTurn(){
+  stopTimer();
+  if(!gameActive || !players.length){ render(); return; }
+  var p = players[currentTurn];
+  if(!p || p.hand.length===0){ nextTurn(); return; }
+  turnLeft = TURN_SECONDS;
+  updateTurnBar();
+  render();
+  if(p.id===myId){ turnTimerId = setInterval(tick, 100); }
+  else if(p.bot && iAmDriver()){
+    botTimerId = setTimeout(function(){ botTimerId=null; if(gameActive && players[currentTurn] && players[currentTurn].bot) aiAct(currentTurn); }, 700);
   }
 }
 function tick(){
@@ -877,7 +1074,10 @@ function updateTurnBar(){
   var bar = $('turn-bar'); if(!bar) return;
   bar.style.width = Math.max(0,(turnLeft/TURN_SECONDS)*100)+'%';
 }
-function stopTimer(){ if(turnTimerId){ clearInterval(turnTimerId); turnTimerId = null; } }
+function stopTimer(){
+  if(turnTimerId){ clearInterval(turnTimerId); turnTimerId = null; }
+  if(botTimerId){ clearTimeout(botTimerId); botTimerId = null; }
+}
 function aiAct(idx){
   if(!gameActive) return;
   var move = aiChoose();
@@ -887,7 +1087,10 @@ function aiAct(idx){
 }
 function autoAct(idx){
   if(!gameActive) return;
-  if(idx!==0){ aiAct(idx); return; }
+  if(idx!==myIdx){
+    if(players[idx] && players[idx].bot) aiAct(idx);
+    return;
+  }
   if(table){ playerPass(); }
   else {
     var set = bestPlayerSet();
@@ -899,16 +1102,16 @@ function autoAct(idx){
 
 /* ================= ปุ่มผู้เล่น ================= */
 function toggleSelect(i){
-  if(currentTurn!==0 || !gameActive) return;
+  if(currentTurn!==myIdx || !gameActive) return;
   var pos = selected.indexOf(i);
   if(pos>-1) selected.splice(pos,1);
   else { if(selected.length>=5){ toast('เลือกได้สูงสุด 5 ใบ'); return; } selected.push(i); }
   render();
 }
 function playerPlay(){
-  if(currentTurn!==0 || !gameActive) return;
+  if(currentTurn!==myIdx || !gameActive) return;
   if(!selected.length){ toast('เลือกไพ่ในมือก่อน'); return; }
-  var cards = selected.map(function(i){ return players[0].hand[i]; });
+  var cards = selected.map(function(i){ return players[myIdx].hand[i]; });
   sortHand(cards);
   var det = classify(cards);
   if(!det){ toast('ไพ่ที่เลือกไม่ใช่ชุดที่เล่นได้'); return; }
@@ -917,32 +1120,33 @@ function playerPlay(){
   playerPlaySet({cards:cards, cat:det.cat, rank:det.rank, suit:det.suit});
 }
 function playerPlaySet(set){
-  if(currentTurn!==0 || !gameActive) return;
+  if(currentTurn!==myIdx || !gameActive) return;
   var chosen = set.cards, idxs = [];
-  players[0].hand.forEach(function(c,i){ if(chosen.indexOf(c)>-1) idxs.push(i); });
+  players[myIdx].hand.forEach(function(c,i){ if(chosen.indexOf(c)>-1) idxs.push(i); });
   selected = []; stopTimer();
   playCards(0, {cards:chosen, idxs:idxs, cat:set.cat, rank:set.rank, suit:set.suit});
   nextTurn();
 }
 function playerAuto(){
-  if(currentTurn!==0 || !gameActive) return;
+  if(currentTurn!==myIdx || !gameActive) return;
   var set = bestPlayerSet();
   if(!set){ toast('ไม่มีไพ่ที่ลงได้ตอนนี้ — ลองเปิดไพ่สำรอง'); return; }
   selected = set.idxs.slice().sort(function(a,b){ return a-b; });
   render();
 }
 function playerPass(){
-  if(currentTurn!==0 || !gameActive) return;
+  if(currentTurn!==myIdx || !gameActive) return;
   if(!table){ toast('คุณเริ่มรอบนี้ ต้องลงไพ่ ไม่สามารถผ่านได้'); return; }
   stopTimer(); selected = [];
   passTurn(0); nextTurn();
 }
 function playerOpenStock(){
-  if(currentTurn!==0 || !gameActive) return;
+  if(currentTurn!==myIdx || !gameActive) return;
   if(!stock.length){ toast('ไพ่สำรองหมดแล้ว'); return; }
   var c = stock.pop();
-  players[0].hand.push(c); sortHand(players[0].hand);
+  players[myIdx].hand.push(c); sortHand(players[myIdx].hand);
   addLog('คุณเปิดไพ่สำรอง: '+c.v+c.s+' (เหลือ '+stock.length+' ใบ)');
+  commitGame();
   render();
 }
 
@@ -959,6 +1163,11 @@ function endRound(){
     p.slaveLeft = (slave && p.rank===1) ? slave.hand.length : 0;
     p.score += p.roundBase + p.roundWinBonus;
   });
+  commitGame();
+  renderRoundModal();
+  render();
+}
+function renderRoundModal(){
   var ranked = players.slice().sort(function(a,b){ return (a.rank||99)-(b.rank||99); });
   var roles = ['King (ราชา)','Queen (ราชินี)','People (สามัญชน)','Slave (สลาฟ)'];
   var html = '';
@@ -980,7 +1189,6 @@ function endRound(){
   $('round-sub').textContent = 'รอบที่ '+roundNo+' · แต้มสะสมทั้งหมด';
   $('round-modal').classList.remove('hidden');
   $('round-modal').classList.add('flex');
-  render();
 }
 function nextRound(){
   $('round-modal').classList.add('hidden');
@@ -995,11 +1203,24 @@ function closeRoundModal(){
 
 /* ================= UI ================= */
 function addLog(msg){
+  LOG.push(msg);
+  if(LOG.length>80) LOG.shift();
   var box = $('game-log');
   var d = document.createElement('div');
   d.className = 'logline text-emerald-50/85';
   d.textContent = msg;
   box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+function renderLog(){
+  var box = $('game-log'); if(!box) return;
+  box.innerHTML = '';
+  LOG.forEach(function(m){
+    var d = document.createElement('div');
+    d.className = 'logline text-emerald-50/85';
+    d.textContent = m;
+    box.appendChild(d);
+  });
   box.scrollTop = box.scrollHeight;
 }
 function openRules(){ $('rules-modal').classList.remove('hidden'); $('rules-modal').classList.add('flex'); paintToggle(); }
@@ -1013,7 +1234,7 @@ function paintToggle(){
 }
 function render(){
   if(!players.length) return;
-  var me = players[0];
+  var me = players[myIdx];
   /* มือผู้เล่น */
   var handBox = $('player-hand');
   handBox.innerHTML = '';
@@ -1044,8 +1265,9 @@ function render(){
     var backs = '';
     var show = Math.min(p.hand.length, 3);
     for(var b=0;b<show;b++) backs += backHTML('sm');
-    var tag = p.human ? 'คุณ' : (p.bot ? 'บอท' : 'ผู้เล่น');
-    d.innerHTML = '<div class="avatar">'+(p.human?'ME':(p.bot?'BOT':'PL'))+'</div>'+
+    var isMe = (p.id===myId);
+    var tag = isMe ? 'คุณ' : (p.bot ? 'บอท' : 'ผู้เล่น');
+    d.innerHTML = '<div class="avatar">'+(isMe?'ME':(p.bot?'BOT':'PL'))+'</div>'+
       '<div class="info">'+
         '<div class="nm">'+esc(p.name)+'</div>'+
         '<div class="ct">'+p.hand.length+' ใบ · '+tag+'</div>'+
@@ -1081,7 +1303,7 @@ function render(){
   /* ปุ่ม + สถานะ */
   var controls = $('action-controls');
   var pill = $('turn-pill');
-  var canPlay = currentTurn===0 && gameActive;
+  var canPlay = currentTurn===myIdx && gameActive;
   if(canPlay){
     controls.classList.remove('hidden'); controls.classList.add('flex');
     var noLegal = !bestPlayerSet();
@@ -1107,10 +1329,10 @@ function render(){
 /* ================= คีย์ลัด ================= */
 document.addEventListener('keydown', function(e){
   var k = e.key.toLowerCase();
-  if(k===' '){ e.preventDefault(); if(currentTurn===0 && gameActive) playerPlay(); }
-  else if(k==='n'){ if(currentTurn===0 && gameActive) playerPass(); }
+  if(k===' '){ e.preventDefault(); if(currentTurn===myIdx && gameActive) playerPlay(); }
+  else if(k==='n'){ if(currentTurn===myIdx && gameActive) playerPass(); }
   else if(k==='h'){ openRules(); }
-  else if(k==='a'){ if(currentTurn===0 && gameActive) playerAuto(); }
+  else if(k==='a'){ if(currentTurn===myIdx && gameActive) playerAuto(); }
   else if(k==='escape'){ closeRules(); }
 });
 
@@ -1119,14 +1341,47 @@ window.addEventListener('load', function(){
   initLobbyCounts();
   loadAgree();
   paintToggle();
-  renderRoomList();
+  roomsLoad();
   $('game-log').innerHTML = '';
   addLog('ยินดีต้อนรับสู่เกมไพ่สลาฟ');
+  try{
+    var rc = sessionStorage.getItem('slave_room_v1');
+    var rr = rc ? getRoom(rc) : null;
+    if(rr && rr.seats.some(function(s){ return s.id===myId; })){
+      room = rr;
+      if(rr.game && rr.game.players && rr.game.players.length){
+        restoreGame(rr.game);
+        showScreen('screen-game');
+        syncTurn();
+      } else {
+        renderRoom(); showScreen('screen-room');
+      }
+    }
+  }catch(e){}
+  renderRoomList();
   if(chan) chan.onmessage = function(ev){
     var m = ev.data || {};
-    if(m.type==='rooms'){ renderRoomList(); }
+    if(!m || m.from===myId) return;
+    if(m.type==='rooms'){ roomsLoad(); renderRoomList(); if(room) renderRoom(); }
+    else if(m.type==='state'){
+      if(m.room){ ROOMS[m.room.code] = m.room; }
+      else { roomsLoad(); }
+      if(room && m.code===room.code) applyRoomState(getRoom(m.code));
+      renderRoomList();
+    }
   };
   setInterval(renderRoomList, 4000);
+  setInterval(function(){
+    if(SUPABASE_ON) return;
+    if(!room){ roomsLoad(); renderRoomList(); return; }
+    var cur = freshRoom(room.code);
+    if(cur && (cur.v||0) !== (room.v||0)) applyRoomState(cur);
+    else {
+      if(gameActive && players.length && players[currentTurn] && players[currentTurn].hand.length===0) nextTurn();
+      renderRoomList();
+    }
+  }, 1000);
+  bootSupabase();
 });
 /* ================= ข้อตกลงการใช้งาน ================= */
 var agreeAccepted = false;
