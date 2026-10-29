@@ -104,6 +104,16 @@
   .room-slot{ border:1px dashed rgba(227,189,104,.3); border-radius:14px; min-height:74px; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:3px; background:rgba(0,0,0,.22); }
   .room-slot.filled{ border-style:solid; background:linear-gradient(180deg, rgba(8,64,50,.7), rgba(3,30,24,.8)); }
+  .disclaimer-banner{
+    border:1px solid rgba(227,189,104,.35); border-radius:16px; padding:10px 14px;
+    background:linear-gradient(180deg, rgba(60,42,8,.55), rgba(28,20,4,.45));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+  }
+  .disclaimer-banner.compact{ padding:6px 12px; border-radius:12px; }
+  .disclaimer-title{ color:#f7df9a; font-weight:800; font-size:12px; letter-spacing:.01em; }
+  .disclaimer-banner.compact .disclaimer-title{ font-size:11px; }
+  .disclaimer-text{ font-size:11px; line-height:1.55; color:#d8e8e0; }
+  .disclaimer-banner.compact .disclaimer-text{ font-size:10.5px; }
 </style>
 </head>
 <body class="min-h-screen">
@@ -120,7 +130,17 @@
       <p class="text-xs sm:text-sm text-emerald-200/80 mt-1">สร้างห้อง · เติมบอท · เล่นได้ 4–7 คน</p>
     </div>
 
-    <div class="lobby-card rounded-3xl p-4 sm:p-6 grid md:grid-cols-2 gap-5">
+        <!-- ข้อตกลงการใช้งาน (เห็นชัดตอนสร้างห้อง) -->
+    <div class="disclaimer-banner mb-4">
+      <div class="disclaimer-title">ข้อตกลงการใช้งาน เพื่อความบันเทิง ห้ามเล่นพนันใดๆ</div>
+      <div class="disclaimer-text">เกมนี้จัดทำขึ้นเพื่อ <b>ความบันเทิง</b> เท่านั้น <b>ห้ามเล่นพนันใด ๆ</b> และไม่มีการเดิมพันเงินจริง สินค้า หรือรางวัลที่มีมูลค่า<br>ผู้ให้บริการไม่จัดให้มีการเล่นเกมพนัน (พ.ร.บ. การพนัน พ.ศ. 2478 มาตรา 12) · ไม่จัดให้มีการนำเข้าข้อมูลเกี่ยวกับคดีการพนัน (พ.ร.บ. ว่าด้วยความผิดเกี่ยวกับคอมพิวเตอร์ พ.ศ. 2550) · เล่นด้วยไพ่ตามพระราชบัญญัติไพ่ พ.ศ. 2486</div>
+      <div class="mt-2 flex items-center gap-2 flex-wrap">
+        <button onclick="openAgree()" class="btn px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-600/60">อ่านข้อตกลงฯ ฉบับเต็ม</button>
+        <span id="agree-state" class="text-[11px] text-amber-200">ยังไม่ได้รับทราบ — ต้องกด “รับทราบแล้ว” ก่อนสร้างห้อง</span>
+      </div>
+    </div>
+
+<div class="lobby-card rounded-3xl p-4 sm:p-6 grid md:grid-cols-2 gap-5">
       <!-- ผู้เล่น -->
       <div class="flex flex-col gap-3">
         <label class="text-xs uppercase tracking-widest text-emerald-300/70">ชื่อผู้เล่น</label>
@@ -219,7 +239,13 @@
     </div>
   </header>
 
-  <main class="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-3">
+    <!-- ข้อตกลงการใช้งาน (เห็นชัดตลอดการเล่น) -->
+  <div class="disclaimer-banner compact">
+    <div class="disclaimer-title">ข้อตกลงการใช้งาน เพื่อความบันเทิง ห้ามเล่นพนันใดๆ</div>
+    <div class="disclaimer-text">เกมนี้เล่นเพื่อความบันเทิงเท่านั้น ไม่มีการเดิมพันเงินจริง · ผู้ให้บริการไม่จัดให้มีการเล่นเกมพนัน (พ.ร.บ. การพนัน พ.ศ. 2478 มาตรา 12) และไม่นำเข้าข้อมูลเกี่ยวกับคดีการพนัน (พ.ร.บ. ว่าด้วยความผิดเกี่ยวกับคอมพิวเตอร์ พ.ศ. 2550) · เล่นด้วยไพ่ตามพระราชบัญญัติไพ่ พ.ศ. 2486</div>
+  </div>
+
+<main class="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-3">
     <div id="table-area" class="lg:col-span-3 panel-tight rounded-3xl p-3 flex flex-col gap-3" style="min-height:440px;">
       <div id="seats" class="flex flex-wrap gap-2 justify-center items-start"></div>
       <div class="flex-1 flex items-center justify-center">
@@ -251,15 +277,15 @@
       </div>
     </div>
 
-    <aside class="panel rounded-2xl p-3 flex flex-col gap-3 min-h-[220px]">
+    <aside class="panel rounded-2xl p-3 flex flex-col gap-3 h-[300px] lg:h-[440px] overflow-hidden">
       <div>
         <h3 class="text-[10px] font-bold text-emerald-300/80 uppercase tracking-[.18em] mb-2">ตารางนับ (ไพ่ที่ลงสะสม)</h3>
         <div id="counter-grid" class="grid grid-cols-4 gap-1.5"></div>
       </div>
       <div class="gold-line opacity-60"></div>
-      <div class="flex-1 flex flex-col min-h-[120px]">
+      <div class="flex-1 flex flex-col min-h-0">
         <h3 class="text-[10px] font-bold text-emerald-300/80 uppercase tracking-[.18em] mb-2">บันทึกเหตุการณ์</h3>
-        <div id="game-log" class="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-1.5 text-[11px] text-emerald-50/85 pr-1"></div>
+        <div id="game-log" class="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-1.5 text-[11px] text-emerald-50/85 pr-1"></div>
       </div>
     </aside>
   </main>
@@ -316,6 +342,23 @@
   </div>
 </div>
 
+<!-- ============ MODAL ข้อตกลงฯ ============ -->
+<div id="agree-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[75] hidden items-center justify-center p-4">
+  <div class="panel rounded-3xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto text-left">
+    <h2 class="text-xl font-bold gold-text border-b border-emerald-700/40 pb-2 mb-3">ข้อตกลงการใช้งาน</h2>
+    <ul class="text-[13px] text-emerald-50/90 list-disc pl-5 space-y-2 leading-relaxed">
+      <li>เกมนี้จัดทำขึ้นเพื่อ <b>ความบันเทิง</b> เท่านั้น <b>ห้ามเล่นพนันใด ๆ</b></li>
+      <li>การเล่นเกมนี้ <b>ไม่มีการเดิมพัน</b> ด้วยเงินจริง สินค้า หรือรางวัลที่มีมูลค่า และไม่มีการซื้อขาย/แลกเปลี่ยนสิทธิ์การเล่นในทุกกรณี</li>
+      <li>ผู้ให้บริการ <b>ไม่จัดให้มีการเล่นเกมพนัน</b> ตามพระราชบัญญัติว่าด้วยการพนัน พ.ศ. 2478 มาตรา 12</li>
+      <li>ผู้ให้บริการ <b>ไม่จัดให้มีการนำเข้าข้อมูล</b> เกี่ยวกับคดีการพนัน ตามพระราชบัญญัติว่าด้วยความผิดเกี่ยวกับคอมพิวเตอร์ พ.ศ. 2550</li>
+      <li>ระบบเล่นด้วยไพ่ตาม <b>พระราชบัญญัติไพ่ พ.ศ. 2486</b> ไม่ใช่ไพ่จำลองเพื่อการพนัน</li>
+      <li>ผู้เล่นยินยอมรับว่าเกมนี้เป็นเกมจำลองเพื่อการพักผ่อนหย่อน และผลการเล่นไม่มีมูลค่าทางการเงินใด ๆ</li>
+    </ul>
+    <button onclick="acceptAgree()" class="btn w-full mt-4 py-2.5 rounded-xl font-bold text-emerald-950"
+      style="background:linear-gradient(180deg,#f7df9a,#d8ab4f);">รับทราบแล้ว</button>
+  </div>
+</div>
+
 <!-- ============ MODAL ผลรอบ ============ -->
 <div id="round-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[70] hidden items-center justify-center p-4">
   <div class="panel rounded-3xl p-5 max-w-md w-full">
@@ -368,6 +411,8 @@ var gameActive = false;
 var allowPlus2 = true;
 var turnLeft = 12, turnTimerId = null;
 var TURN_SECONDS = 12;
+var handDealAnim = false;   // แจกไพ่แอนิเมชันรอบเดียวตอนเริ่มรอบ
+var lastTableKey = '';      // กันไพ่บนโต๊ะแอนิเมชันซ้ำทุกครั้งที่ render
 var myId = 'me-' + Math.random().toString(36).slice(2,8);
 var myName = '';
 var room = null;            // {code, max, seats:[{id,name,bot}], hostId}
@@ -442,7 +487,8 @@ function makeCode(){
   for(var i=0;i<6;i++) out += chars[Math.floor(Math.random()*chars.length)];
   return out;
 }
-function createRoom(){
+function createRoom(){ requireAgree(createRoomNow); }
+function createRoomNow(){
   myName = ($('inp-name').value || '').trim() || 'ผู้เล่น';
   var list = readRooms();
   var code = makeCode();
@@ -468,7 +514,8 @@ function joinRoom(code){
   broadcast({type:'rooms'});
   renderRoom(); showScreen('screen-room');
 }
-function quickPlay(){
+function quickPlay(){ requireAgree(quickPlayNow); }
+function quickPlayNow(){
   myName = ($('inp-name').value || '').trim() || 'ผู้เล่น';
   room = {code:'SOLO', max:lobbyCount, hostId:myId, seats:[{id:myId, name:myName, bot:false}]};
   fillBots();
@@ -743,6 +790,7 @@ function startRound(){
   deck = shuffle(makeDeck());
   stock = [];
   table = null; lastPlayer = -1; passStreak = 0; selected = []; gameActive = true;
+  handDealAnim = true; lastTableKey = '';
   var per = HAND_SIZE[players.length] || 8;
   players.forEach(function(p){ p.hand=[]; p.played=0; p.rank=null; p.lastPlay=null; });
   for(var i=0;i<per;i++) for(var j=0;j<players.length;j++){
@@ -975,12 +1023,13 @@ function render(){
     me.hand.forEach(function(card,i){
       var isSel = selected.indexOf(i)>-1;
       var el = document.createElement('div');
-      el.className = 'deal';
-      el.style.animationDelay = (i*30)+'ms';
+      el.className = handDealAnim ? 'deal' : '';
+      if(handDealAnim) el.style.animationDelay = (i*30)+'ms';
       el.innerHTML = faceHTML(card, 'playable '+(isSel?'sel':''));
       el.onclick = function(){ toggleSelect(i); };
       handBox.appendChild(el);
     });
+    if(handDealAnim) handDealAnim = false;
   }
   $('player-count').textContent = 'ไพ่ในมือ: '+me.hand.length+' ใบ';
   $('player-score').textContent = me.score;
@@ -1007,8 +1056,11 @@ function render(){
 
   /* สนามกลาง */
   var tbl = $('table-cards'); tbl.innerHTML = '';
+  var tKey = table ? table.cards.map(function(c){ return c.id; }).join(',') : '';
+  var tPop = (tKey !== lastTableKey) ? ' pop' : '';
+  lastTableKey = tKey;
   if(table){
-    table.cards.forEach(function(c){ tbl.innerHTML += faceHTML(c,'lg pop'); });
+    table.cards.forEach(function(c){ tbl.innerHTML += faceHTML(c,'lg'+tPop); });
     var hi = table.cards.slice().sort(function(a,b){ return (a.vw-b.vw)||(a.sw-b.sw); });
     $('table-type').textContent = TYPE_LABEL[table.cat] + ' · สูงสุด ' + hi[hi.length-1].v;
     $('table-owner').textContent = 'โดย ' + players[table.owner].name;
@@ -1065,6 +1117,7 @@ document.addEventListener('keydown', function(e){
 /* ================= เริ่ม ================= */
 window.addEventListener('load', function(){
   initLobbyCounts();
+  loadAgree();
   paintToggle();
   renderRoomList();
   $('game-log').innerHTML = '';
@@ -1075,6 +1128,40 @@ window.addEventListener('load', function(){
   };
   setInterval(renderRoomList, 4000);
 });
+/* ================= ข้อตกลงการใช้งาน ================= */
+var agreeAccepted = false;
+var agreePending = null;
+function openAgree(nextAction){
+  agreePending = nextAction || null;
+  $('agree-modal').classList.remove('hidden');
+  $('agree-modal').classList.add('flex');
+}
+function closeAgree(){
+  $('agree-modal').classList.add('hidden');
+  $('agree-modal').classList.remove('flex');
+}
+function acceptAgree(){
+  agreeAccepted = true;
+  try { localStorage.setItem('slave_agreed_v1','1'); } catch(e){}
+  var st = $('agree-state');
+  if(st){ st.textContent = 'รับทราบข้อตกลงฯ แล้ว'; st.className = 'text-[11px] text-emerald-300'; }
+  closeAgree();
+  addLog('ผู้เล่นรับทราบข้อตกลงการใช้งานแล้ว (เล่นเพื่อความบันเทิง ห้ามเล่นพนัน)');
+  var next = agreePending; agreePending = null;
+  if(next){ next(); }
+}
+function requireAgree(nextAction){
+  if(agreeAccepted){ nextAction(); return; }
+  openAgree(nextAction);
+}
+function loadAgree(){
+  try { agreeAccepted = localStorage.getItem('slave_agreed_v1') === '1'; } catch(e){ agreeAccepted = false; }
+  var st = $('agree-state');
+  if(st){
+    if(agreeAccepted){ st.textContent = 'รับทราบข้อตกลงฯ แล้ว'; st.className = 'text-[11px] text-emerald-300'; }
+    else { st.textContent = 'ยังไม่ได้รับทราบ — ต้องกด “รับทราบแล้ว” ก่อนสร้างห้อง'; st.className = 'text-[11px] text-amber-200'; }
+  }
+}
 </script>
 </body>
 </html>
