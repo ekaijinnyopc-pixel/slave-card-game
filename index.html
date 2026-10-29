@@ -1124,7 +1124,7 @@ function playerPlaySet(set){
   var chosen = set.cards, idxs = [];
   players[myIdx].hand.forEach(function(c,i){ if(chosen.indexOf(c)>-1) idxs.push(i); });
   selected = []; stopTimer();
-  playCards(0, {cards:chosen, idxs:idxs, cat:set.cat, rank:set.rank, suit:set.suit});
+  playCards(myIdx, {cards:chosen, idxs:idxs, cat:set.cat, rank:set.rank, suit:set.suit});
   nextTurn();
 }
 function playerAuto(){
@@ -1138,7 +1138,7 @@ function playerPass(){
   if(currentTurn!==myIdx || !gameActive) return;
   if(!table){ toast('คุณเริ่มรอบนี้ ต้องลงไพ่ ไม่สามารถผ่านได้'); return; }
   stopTimer(); selected = [];
-  passTurn(0); nextTurn();
+  passTurn(myIdx); nextTurn();
 }
 function playerOpenStock(){
   if(currentTurn!==myIdx || !gameActive) return;
@@ -1352,7 +1352,7 @@ window.addEventListener('load', function(){
       if(rr.game && rr.game.players && rr.game.players.length){
         restoreGame(rr.game);
         showScreen('screen-game');
-        syncTurn();
+        if(gameActive) syncTurn(); else renderRoundModal();
       } else {
         renderRoom(); showScreen('screen-room');
       }
