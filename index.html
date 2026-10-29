@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>เกมไพ่สลาฟ — สลาฟคาร์ด</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{ --gold:#e3bd68; --gold-lite:#f7e6b4; --red:#c62828; }
+  *{ -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; }
+  body{
+    font-family:'Prompt',system-ui,-apple-system,sans-serif;
+    background:radial-gradient(130% 85% at 50% -10%, #17916d 0%, #0a5b45 28%, #05402f 58%, #021d17 100%);
+    color:#e9f6f0; overflow-x:hidden;
+  }
+  body::after{ content:''; position:fixed; inset:0; pointer-events:none; z-index:60;
+    background:radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 45%, rgba(0,0,0,.42) 100%); }
+  .felt-noise{ position:fixed; inset:0; pointer-events:none; opacity:.05; z-index:0;
+    background-image:radial-gradient(rgba(255,255,255,.9) .6px, transparent .6px); background-size:3px 3px; }
+  .gold-line{ background:linear-gradient(90deg, transparent, var(--gold), transparent); height:1px; }
+  .panel{ background:linear-gradient(180deg, rgba(6,54,42,.78), rgba(3,32,25,.86));
+    border:1px solid rgba(227,189,104,.22); box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05); backdrop-filter:blur(6px); }
+  .gold-text{ background:linear-gradient(180deg,#fff4d2 0%, var(--gold) 55%, #a9822f 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+  /* ===== ไพ่ ===== */
+  .card{
+    --cw:74px; position:relative; width:var(--cw); aspect-ratio:0.688;
+    border-radius:calc(var(--cw)*0.11); container-type:inline-size;
+    background:linear-gradient(165deg,#fffef9 0%,#fbf6e8 45%,#efe6cf 100%);
+    box-shadow:0 8px 18px rgba(0,0,0,.45), 0 2px 4px rgba(0,0,0,.3),
+      inset 0 0 0 1px rgba(255,255,255,.9), inset 0 0 0 calc(var(--cw)*0.035) rgba(255,255,255,.55),
+      inset 0 0 0 calc(var(--cw)*0.055) rgba(146,118,58,.28);
+    color:#15251f; user-select:none; flex:none;
+    transition:transform .16s cubic-bezier(.2,.9,.3,1.2), box-shadow .16s ease, filter .16s ease;
+  }
+  .card::after{ content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background:repeating-linear-gradient(115deg, rgba(120,95,40,.05) 0 2px, rgba(255,255,255,0) 2px 5px);
+    mix-blend-mode:multiply; opacity:.55; }
+  .card .corner{ position:absolute; display:flex; flex-direction:column; align-items:center; line-height:.92; z-index:2; }
+  .card .corner.tl{ top:3.5%; left:6%; }
+  .card .corner.br{ bottom:3.5%; right:6%; transform:rotate(180deg); }
+  .card .rank{ font-family:'Playfair Display',Georgia,serif; font-weight:900; font-size:29cqw; letter-spacing:-.03em; line-height:.9; }
+  .card .pip{ font-size:17cqw; margin-top:.5cqw; line-height:1; }
+  .card .bigpip{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:50cqw; opacity:.9; z-index:1; filter:drop-shadow(0 2cqw 1.5cqw rgba(0,0,0,.18)); }
+  .card.red{ color:var(--red); }
+  .card.sel{ transform:translateY(-14px) scale(1.04);
+    box-shadow:0 16px 30px rgba(0,0,0,.5), 0 0 0 3px var(--gold-lite), 0 0 26px rgba(227,189,104,.55); z-index:20; }
+  .card.playable:hover{ transform:translateY(-8px); box-shadow:0 14px 26px rgba(0,0,0,.5), 0 0 0 2px rgba(227,189,104,.6); }
+  .card.dim{ filter:grayscale(.55) brightness(.72); }
+  .card.back{ background:repeating-linear-gradient(45deg, rgba(255,255,255,.09) 0 6px, rgba(255,255,255,0) 6px 12px),
+    linear-gradient(160deg,#1b4f7a 0%,#123a5c 55%,#0d2a45 100%);
+    box-shadow:0 6px 14px rgba(0,0,0,.5), inset 0 0 0 2px rgba(255,255,255,.18), inset 0 0 0 4px rgba(0,0,0,.25); }
+  .card.back::after{ background:radial-gradient(circle at 50% 50%, rgba(227,189,104,.5) 0 14%, transparent 15%),
+    radial-gradient(circle at 50% 50%, transparent 0 28%, rgba(227,189,104,.28) 29% 31%, transparent 32%);
+    opacity:.9; mix-blend-mode:screen; }
+  .card.lg{ --cw:84px; } .card.md{ --cw:44px; } .card.sm{ --cw:30px; }
+  .hand{ display:flex; align-items:flex-end; padding:10px 4px 4px; min-height:calc(var(--cw) + 26px); }
+  .hand .card{ cursor:pointer; }
+  .hand .card + .card{ margin-left:-26px; }
+  @media (min-width:768px){ .hand .card + .card{ margin-left:6px; } .card{ --cw:80px; } .card.lg{ --cw:92px; } }
+  .fan{ display:flex; align-items:flex-end; } .fan .card + .card{ margin-left:-15px; }
+
+  .seat{ display:flex; align-items:center; gap:7px; padding:5px 11px 5px 5px; border-radius:999px;
+    background:linear-gradient(180deg, rgba(5,48,38,.9), rgba(2,25,20,.95));
+    border:1px solid rgba(227,189,104,.2); box-shadow:0 6px 16px rgba(0,0,0,.4); transition:all .22s ease; }
+  .seat.active{ border-color:var(--gold-lite); box-shadow:0 0 0 3px rgba(227,189,104,.35), 0 0 26px rgba(227,189,104,.5); }
+  .seat .avatar{ width:32px; height:32px; border-radius:999px; display:grid; place-items:center; font-weight:800; font-size:11px;
+    background:linear-gradient(160deg,#1c5e4b,#0c3a2d); color:#cdeee1; border:2px solid rgba(255,255,255,.14); flex:none; letter-spacing:.04em; }
+  .seat.active .avatar{ background:linear-gradient(160deg,#f5d98a,#b8912f); color:#2a1f06; }
+  .seat .info{ display:flex; flex-direction:column; line-height:1.2; min-width:0; }
+  .seat .nm{ font-size:11px; font-weight:600; color:#dff5ec; max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .seat .ct{ font-size:10px; color:#a8e0cd; }
+  .seat .mini{ display:flex; gap:1px; margin-top:2px; }
+  .seat .mini .card{ --cw:14px; }
+
+  .table-well{ background:radial-gradient(ellipse at 50% 42%, rgba(30,140,105,.55) 0%, rgba(8,60,45,.75) 55%, rgba(3,35,27,.9) 100%);
+    border:2px solid rgba(227,189,104,.3); box-shadow:inset 0 0 70px rgba(0,0,0,.55), 0 18px 40px rgba(0,0,0,.4); }
+  .deal{ animation:dealIn .42s cubic-bezier(.2,.9,.3,1.05) backwards; }
+  @keyframes dealIn{ from{ transform:translate(-40%,-140%) rotate(-25deg) scale(.6); opacity:0; } to{ transform:none; opacity:1; } }
+  .pop{ animation:popIn .28s cubic-bezier(.2,.9,.3,1.4) backwards; }
+  @keyframes popIn{ from{ transform:scale(.7) translateY(14px); opacity:0; } to{ transform:none; opacity:1; } }
+  .pulse-turn{ animation:pulseTurn 1.4s ease-in-out infinite; }
+  @keyframes pulseTurn{ 0%,100%{ box-shadow:0 0 0 0 rgba(227,189,104,.55); } 50%{ box-shadow:0 0 0 12px rgba(227,189,104,0); } }
+  .no-scrollbar::-webkit-scrollbar{ display:none; } .no-scrollbar{ -ms-overflow-style:none; scrollbar-width:none; }
+  .logline{ border-left:2px solid rgba(227,189,104,.55); padding-left:8px; }
+  .toast{ position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:80; animation:toastIn .22s ease-out; }
+  @keyframes toastIn{ from{ transform:translate(-50%,-14px); opacity:0; } to{ transform:translate(-50%,0); opacity:1; } }
+  .btn{ transition:transform .12s ease, filter .15s ease, box-shadow .15s ease; }
+  .btn:active{ transform:scale(.96); }
+  .screen{ animation:fadeIn .3s ease; }
+  @keyframes fadeIn{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+  .lobby-card{ background:linear-gradient(180deg, rgba(6,54,42,.85), rgba(2,25,20,.95));
+    border:1px solid rgba(227,189,104,.28); box-shadow:0 20px 50px rgba(0,0,0,.55); }
+  .num-btn{ width:44px; height:44px; border-radius:12px; font-weight:800; font-size:17px; color:#dff5ec;
+    background:rgba(0,0,0,.3); border:1px solid rgba(227,189,104,.25); transition:all .15s ease; }
+  .num-btn.on{ background:linear-gradient(180deg,#f7df9a,#d8ab4f); color:#23300f; border-color:#f7df9a;
+    box-shadow:0 6px 16px rgba(0,0,0,.45); transform:scale(1.06); }
+  .room-slot{ border:1px dashed rgba(227,189,104,.3); border-radius:14px; min-height:74px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:3px; background:rgba(0,0,0,.22); }
+  .room-slot.filled{ border-style:solid; background:linear-gradient(180deg, rgba(8,64,50,.7), rgba(3,30,24,.8)); }
+</style>
+</head>
+<body class="min-h-screen">
+<div class="felt-noise"></div>
+
+<div class="relative z-10 min-h-screen flex flex-col p-2 sm:p-4 gap-3">
+
+<!-- ============ หน้าปก / LOBBY ============ -->
+<section id="screen-lobby" class="screen flex-1 flex items-center justify-center">
+  <div class="w-full max-w-3xl">
+    <div class="text-center mb-5">
+      <div class="text-5xl sm:text-6xl mb-2">♠</div>
+      <h1 class="text-3xl sm:text-5xl font-bold gold-text tracking-wide">เกมไพ่สลาฟ</h1>
+      <p class="text-xs sm:text-sm text-emerald-200/80 mt-1">สร้างห้อง · เติมบอท · เล่นได้ 4–7 คน</p>
+    </div>
+
+    <div class="lobby-card rounded-3xl p-4 sm:p-6 grid md:grid-cols-2 gap-5">
+      <!-- ผู้เล่น -->
+      <div class="flex flex-col gap-3">
+        <label class="text-xs uppercase tracking-widest text-emerald-300/70">ชื่อผู้เล่น</label>
+        <input id="inp-name" maxlength="18" placeholder="ใส่ชื่อของคุณ"
+          class="w-full px-3 py-2.5 rounded-xl bg-black/35 border border-emerald-600/40 text-emerald-50 outline-none focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/25">
+
+        <label class="text-xs uppercase tracking-widest text-emerald-300/70 mt-1">จำนวนผู้เล่นในห้อง</label>
+        <div id="lobby-counts" class="flex gap-2 flex-wrap"></div>
+        <p id="lobby-hint" class="text-[11px] text-emerald-300/70"></p>
+
+        <button onclick="createRoom()" class="btn mt-1 w-full py-3 rounded-xl font-bold text-emerald-950"
+          style="background:linear-gradient(180deg,#f7df9a,#d8ab4f); box-shadow:0 8px 20px rgba(0,0,0,.45);">
+          สร้างห้อง
+        </button>
+      </div>
+
+      <!-- เข้าร่วม / เล่นเดี่ยว -->
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs uppercase tracking-widest text-emerald-300/70">เข้าร่วมห้องด้วยรหัส</label>
+          <div class="flex gap-2 mt-1">
+            <input id="inp-code" maxlength="6" placeholder="ABC123"
+              class="flex-1 px-3 py-2.5 rounded-xl bg-black/35 border border-emerald-600/40 text-emerald-50 uppercase tracking-widest outline-none focus:border-amber-400/70 focus:ring-2 focus:ring-amber-400/25">
+            <button onclick="joinRoom()" class="btn px-4 py-2.5 rounded-xl font-bold text-sm bg-emerald-700 hover:bg-emerald-600 text-emerald-50 border border-emerald-500/50">เข้า</button>
+          </div>
+        </div>
+
+        <div class="gold-line opacity-60 my-1"></div>
+
+        <button onclick="quickPlay()" class="btn w-full py-3 rounded-xl font-bold text-emerald-950"
+          style="background:linear-gradient(180deg,#2bb98a,#137a55); box-shadow:0 8px 20px rgba(0,0,0,.45);">
+          เล่นเดี่ยวกับบอททันที
+        </button>
+        <p class="text-[11px] text-emerald-300/60 text-center">เริ่มเลยไม่ต้องสร้างห้อง · เติมบอทอัตโนมัติให้ครบ</p>
+
+        <div class="gold-line opacity-60 my-1"></div>
+
+        <div>
+          <label class="text-xs uppercase tracking-widest text-emerald-300/70">ห้องที่เปิดอยู่</label>
+          <div id="room-list" class="flex flex-col gap-1.5 mt-1 max-h-[140px] overflow-y-auto no-scrollbar"></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-[11px] text-emerald-300/50 mt-4">
+      ห้องเก็บไว้ในเครื่องนี้ · เปิดหน้าเดียวกันในแท็บอื่นของเบราว์เซอร์เดียวกันเพื่อเข้าร่วมได้ทันที
+    </p>
+  </div>
+</section>
+
+<!-- ============ หน้าห้อง ============ -->
+<section id="screen-room" class="screen hidden flex-1 flex items-center justify-center">
+  <div class="w-full max-w-3xl">
+    <div class="lobby-card rounded-3xl p-4 sm:p-6">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <div class="text-[11px] uppercase tracking-widest text-emerald-300/70">รหัสห้อง</div>
+          <div id="room-code" class="text-3xl font-black tracking-[.3em] gold-text">------</div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="copyCode()" class="btn px-3 py-2 rounded-xl text-sm bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-600/60">คัดลอกรหัส</button>
+          <button onclick="leaveRoom()" class="btn px-3 py-2 rounded-xl text-sm bg-rose-900/60 hover:bg-rose-800/60 text-rose-100 border border-rose-700/50">ออกจากห้อง</button>
+        </div>
+      </div>
+
+      <div id="room-slots" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5"></div>
+
+      <div class="flex flex-wrap gap-2 mt-4">
+        <button onclick="fillBots()" class="btn px-4 py-2.5 rounded-xl font-bold text-sm bg-emerald-700 hover:bg-emerald-600 text-emerald-50 border border-emerald-500/50">เติมบอทให้ครบ</button>
+        <button onclick="addBot()" class="btn px-4 py-2.5 rounded-xl font-bold text-sm bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-600/60">เติมบอท 1 คน</button>
+        <button onclick="startGame()" id="btn-start" class="btn flex-1 py-2.5 rounded-xl font-bold text-emerald-950"
+          style="background:linear-gradient(180deg,#f7df9a,#d8ab4f); box-shadow:0 8px 18px rgba(0,0,0,.4);">เริ่มเกม</button>
+      </div>
+      <p id="room-hint" class="text-[11px] text-emerald-300/70 mt-2"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ หน้าเกม ============ -->
+<section id="screen-game" class="screen hidden flex-1 flex flex-col gap-3">
+  <header class="panel rounded-2xl px-3 sm:px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-10 h-10 rounded-xl grid place-items-center text-xl shrink-0"
+        style="background:linear-gradient(160deg,#f5d98a,#b8912f); color:#2a1f06;">♠</div>
+      <div class="min-w-0">
+        <h1 class="text-base sm:text-xl font-bold gold-text truncate">เกมไพ่สลาฟ</h1>
+        <p class="text-[10px] sm:text-xs text-emerald-200/75 truncate">3 ต่ำสุด → 2 สูงสุด · ♦ &lt; ♣ &lt; ♥ &lt; ♠</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap justify-center">
+      <div class="px-2.5 py-1.5 rounded-lg bg-black/30 border border-emerald-500/25 text-[11px] text-emerald-200">
+        รอบ <b id="h-round">1</b> · แต้ม <b id="h-score" class="text-amber-200">0</b>
+      </div>
+      <button onclick="openRules()" class="btn px-3 py-2 rounded-xl text-xs bg-emerald-800/80 hover:bg-emerald-700/80 text-emerald-100 border border-emerald-600/60">กติกา</button>
+      <button onclick="backToLobby()" class="btn px-3 py-2 rounded-xl text-xs bg-rose-900/50 hover:bg-rose-800/50 text-rose-100 border border-rose-700/50">ออก</button>
+    </div>
+  </header>
+
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-3">
+    <div id="table-area" class="lg:col-span-3 panel-tight rounded-3xl p-3 flex flex-col gap-3" style="min-height:440px;">
+      <div id="seats" class="flex flex-wrap gap-2 justify-center items-start"></div>
+      <div class="flex-1 flex items-center justify-center">
+        <div class="w-full max-w-[540px]">
+        <div class="table-well rounded-3xl p-3 sm:p-4 flex flex-col items-center justify-center gap-2 min-h-[210px] relative">
+          <div class="absolute top-2 left-3 right-3 flex items-center justify-between text-[10px] text-emerald-200/80">
+            <span>กองกลาง: <b id="table-type" class="text-amber-200">ยังไม่มีการลงไพ่</b></span>
+            <span id="table-owner" class="text-emerald-200/60"></span>
+          </div>
+          <div id="table-cards" class="flex gap-1.5 sm:gap-2 justify-center items-center min-h-[96px] w-full pt-3 flex-wrap"></div>
+          <div id="action-controls" class="hidden flex-wrap gap-2 justify-center">
+            <button onclick="playerPlay()" class="btn px-4 py-2 rounded-xl font-bold text-xs sm:text-sm text-white"
+              style="background:linear-gradient(180deg,#2bb98a,#137a55); box-shadow:0 6px 16px rgba(0,0,0,.4);">ลงไพ่ที่เลือก</button>
+            <button onclick="playerAuto()" class="btn px-3 py-2 rounded-xl font-bold text-xs sm:text-sm text-emerald-950"
+              style="background:linear-gradient(180deg,#f7df9a,#d8ab4f); box-shadow:0 6px 16px rgba(0,0,0,.4);">ช่วยเลือก</button>
+            <button onclick="playerOpenStock()" id="btn-stock" class="btn hidden px-3 py-2 rounded-xl font-bold text-xs sm:text-sm text-white"
+              style="background:linear-gradient(180deg,#5b7fe0,#2f4fa5); box-shadow:0 6px 16px rgba(0,0,0,.4);">เปิดไพ่สำรอง</button>
+            <button onclick="playerPass()" class="btn px-4 py-2 rounded-xl font-bold text-xs sm:text-sm text-white"
+              style="background:linear-gradient(180deg,#e05a5a,#a02020); box-shadow:0 6px 16px rgba(0,0,0,.4);">ผ่าน</button>
+          </div>
+          <div id="turn-pill" class="text-[11px] sm:text-xs font-semibold px-3 py-1 rounded-full border border-amber-500/30 bg-amber-950/50 text-amber-200 text-center">
+            กำลังเตรียมเกม…
+          </div>
+          <div class="w-full max-w-[240px] h-1.5 rounded-full bg-black/40 overflow-hidden">
+            <div id="turn-bar" class="h-full bg-gradient-to-r from-amber-300 to-amber-500 transition-all duration-100" style="width:100%"></div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="panel rounded-2xl p-3 flex flex-col gap-3 min-h-[220px]">
+      <div>
+        <h3 class="text-[10px] font-bold text-emerald-300/80 uppercase tracking-[.18em] mb-2">ตารางนับ (ไพ่ที่ลงสะสม)</h3>
+        <div id="counter-grid" class="grid grid-cols-4 gap-1.5"></div>
+      </div>
+      <div class="gold-line opacity-60"></div>
+      <div class="flex-1 flex flex-col min-h-[120px]">
+        <h3 class="text-[10px] font-bold text-emerald-300/80 uppercase tracking-[.18em] mb-2">บันทึกเหตุการณ์</h3>
+        <div id="game-log" class="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-1.5 text-[11px] text-emerald-50/85 pr-1"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="panel rounded-2xl p-3">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+      <div class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-full grid place-items-center font-bold text-sm"
+          style="background:linear-gradient(160deg,#f5d98a,#b8912f); color:#2a1f06;">คุณ</div>
+        <div>
+          <div class="font-bold text-sm text-emerald-50">ผู้เล่น (คุณ)</div>
+          <div id="player-count" class="text-[11px] text-emerald-300/80">ไพ่ในมือ: 0 ใบ</div>
+        </div>
+        <div class="hidden sm:flex gap-2 ml-2 text-[11px]">
+          <span class="px-2 py-1 rounded-lg bg-black/30 border border-emerald-500/25 text-emerald-200">แต้ม <b id="player-score">0</b></span>
+          <span class="px-2 py-1 rounded-lg bg-black/30 border border-emerald-500/25 text-emerald-200">รอบที่ชนะ <b id="player-wins">0</b></span>
+        </div>
+      </div>
+      <div id="selection-info" class="text-[11px] px-3 py-1 rounded-lg bg-amber-950/50 border border-amber-500/30 text-amber-200">
+        เลือกไพ่ 1 / 2 / 3 / 4 / 5 ใบ — Space วาง · N ผ่าน · H กติกา
+      </div>
+    </div>
+    <div id="player-hand" class="hand overflow-x-auto no-scrollbar"></div>
+  </footer>
+</section>
+</div>
+
+<!-- ============ MODAL กติกา ============ -->
+<div id="rules-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[70] hidden items-center justify-center p-4">
+  <div class="panel rounded-3xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto">
+    <h2 class="text-xl font-bold gold-text border-b border-emerald-700/40 pb-2 mb-3">📜 กติกาไพ่สลาฟ</h2>
+    <ul class="text-[13px] text-emerald-50/90 list-disc pl-5 space-y-2 leading-relaxed">
+      <li><b>ผู้เล่น:</b> 4–7 คน · แจกไพ่คนละ 13 / 10 / 8 / 8 / 7 / 7 ใบ (ตามจำนวนคน) · ไพ่ที่เหลือเป็น <b>ไพ่สำรอง</b> · ผู้ถือ <b>♣3</b> เริ่มก่อน</li>
+      <li><b>ลำดับแต้ม (น้อย→มาก):</b> 3 &lt; 4 &lt; 5 &lt; 6 &lt; 7 &lt; 8 &lt; 9 &lt; 10 &lt; J &lt; Q &lt; K &lt; A &lt; <b>2</b></li>
+      <li><b>ลำดับดอก (น้อย→มาก):</b> ข้าวหลามตัด (♦) &lt; ดอกจิก (♣) &lt; โพแดง (♥) &lt; โพดำ (♠)</li>
+      <li><b>เทียบ:</b> ดูค่าไพ่ก่อน ถ้าค่าเท่ากันค่อยดูดอกไพ่</li>
+      <li><b>ชุดไพ่ที่เล่นได้:</b> เดี่ยว (1) · คู่ (2) · ตอง (3) · สี่เหลี่ยม (4) · ชุด 5 ใบ (เรียง → โฟลช์ → สี่เหลี่ยม+1 → เรียงโฟลช์ → รอยัลฟลัช)</li>
+      <li><b>การตอบ:</b> ตอบได้จำนวนเท่ากับบนโต๊ะและต้องใหญ่กว่า <b>หรือ</b> ตอบได้ <b>มากกว่า 2 ใบ</b> → 3 ตบ 1 · 4 ตบ 2 · 5 ตบ 3</li>
+      <li><b>Pass:</b> ถ้าไม่มีไพ่ที่ชนะให้กดผ่าน เมื่อทุกคนผ่าน สนามจะถูกเคลียร์ และผู้ที่ยังมีไพ่เริ่มรอบใหม่ได้ทันที</li>
+      <li><b>ไพ่สำรอง:</b> ถ้าไพ่ในมือหมดและไม่มีไพ่ที่จะเล่น ให้เปิดไพ่สำรองทีละใบ</li>
+      <li><b>จบรอบ:</b> ไพ่หมดมือคนแรก = King · คนที่สอง = Queen · คนที่สาม = People · คนสุดท้าย = Slave</li>
+      <li><b>แต้มรอบ:</b> (ไพ่ที่เหลือมากสุด − ไพ่ที่คุณเหลือ) × 2 + <b>5 ต่อรอบที่คุณชนะ</b> (สะสมทุกรอบ)</li>
+      <li><b>ราชากับสลาง:</b> ราชาได้ <b>2 แต้มต่อไพ่ที่สลางเหลือ</b> เช่น สลางเหลือ 2 ใบ → ราชา +4 แต้ม (สะสมไปรอบถัดไป)</li>
+    </ul>
+    <div class="mt-4 p-3 rounded-xl bg-black/30 border border-emerald-600/30 flex items-center justify-between gap-3">
+      <div>
+        <div class="text-sm font-semibold text-emerald-100">โหมดตอบได้มากกว่า 2 ใบ</div>
+        <div class="text-[11px] text-emerald-300/70">เปิด = 3 ตบ 1 · 4 ตบ 2 · 5 ตบ 3 (ปิด = ต้องลงจำนวนเท่ากันเท่านั้น)</div>
+      </div>
+      <button id="toggle-special" onclick="toggleSpecial()" class="btn w-14 h-8 rounded-full relative" style="background:#14523f;"></button>
+    </div>
+    <button onclick="closeRules()" class="btn w-full mt-4 py-2 rounded-xl font-bold text-emerald-950"
+      style="background:linear-gradient(180deg,#f7df9a,#d8ab4f);">เข้าใจแล้ว</button>
+  </div>
+</div>
+
+<!-- ============ MODAL ผลรอบ ============ -->
+<div id="round-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[70] hidden items-center justify-center p-4">
+  <div class="panel rounded-3xl p-5 max-w-md w-full">
+    <div class="text-center">
+      <div class="text-2xl gold-text font-black tracking-[.3em]">KING</div>
+      <h2 id="round-title" class="text-2xl font-bold gold-text">จบรอบแล้ว!</h2>
+      <p id="round-sub" class="text-xs text-emerald-200/80 mt-1">ผลการจัดอันดับรอบนี้</p>
+    </div>
+    <div id="ranking-list" class="flex flex-col gap-2 my-4"></div>
+    <div class="flex gap-2">
+      <button onclick="nextRound()" class="btn flex-1 py-2.5 rounded-xl font-bold text-emerald-950 text-sm"
+        style="background:linear-gradient(180deg,#f7df9a,#d8ab4f);">รอบถัดไป</button>
+      <button onclick="closeRoundModal()" class="btn flex-1 py-2.5 rounded-xl font-bold text-sm bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-600/60">ดูสนาม</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= ข้อมูลไพ่ ================= */
+var SUITS = [
+  {sym:'♦', name:'ข้าวหลามตัด', w:0, red:true},
+  {sym:'♣', name:'ดอกจิก',      w:1, red:false},
+  {sym:'♥', name:'โพแดง',       w:2, red:true},
+  {sym:'♠', name:'โพดำ',        w:3, red:false}
+];
+var RANKS = ['3','4','5','6','7','8','9','10','J','Q','K','A','2'];
+var SUIT_MAP = {};
+SUITS.forEach(function(s){ SUIT_MAP[s.sym]=s; });
+var T = {single:'single', pair:'pair', triple:'triple', quad:'quad', straight:'straight',
+         flush:'flush', four:'four', sf:'straightflush', royal:'royal'};
+var SIZE_OF = {single:1, pair:2, triple:3, quad:4, straight:5, flush:5, four:5, sf:5, royal:5};
+var FIVE_ORDER = {straight:1, flush:2, four:3, sf:4, royal:5};
+var TYPE_LABEL = {
+  single:'ไพ่เดี่ยว (1 ใบ)', pair:'ไพ่คู่ (2 ใบ)', triple:'ไพ่ตอง (3 ใบ)',
+  quad:'ไพ่สี่เหลี่ยม (4 ใบ)',
+  straight:'Straight (เรียง 5 ใบ)', flush:'Flush (โฟลช์ 5 ใบ)',
+  four:'Four of a Kind + 1', sf:'Straight Flush', royal:'Royal Flush'
+};
+var BOT_NAMES = ['บอทสมชาย','บอทสมหญิง','บอทประนอม','บอทแม่ครัว','บอทครู','บอทเด็กเก่า','บอทนายท่าน'];
+/* จำนวนไพ่ต่อคนตามจำนวนผู้เล่น (ใช้สำรับ 52 ใบ + ไพ่สำรอง) */
+var HAND_SIZE = {4:13, 5:10, 6:8, 7:7};
+
+/* ================= สถานะ ================= */
+var players = [];
+var deck = [], stock = [];
+var table = null;
+var currentTurn = 0, lastPlayer = -1, passStreak = 0;
+var roundNo = 1, selected = [];
+var gameActive = false;
+var allowPlus2 = true;
+var turnLeft = 12, turnTimerId = null;
+var TURN_SECONDS = 12;
+var myId = 'me-' + Math.random().toString(36).slice(2,8);
+var myName = '';
+var room = null;            // {code, max, seats:[{id,name,bot}], hostId}
+var lobbyCount = 4;
+var chan = null;
+try { chan = (typeof BroadcastChannel!=='undefined') ? new BroadcastChannel('slave-lobby-v1') : null; } catch(e) { chan = null; }
+
+/* ================= ยูทิลิตี้ ================= */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function toast(msg){
+  var t = document.createElement('div');
+  t.className = 'toast px-4 py-2 rounded-xl font-bold text-sm text-emerald-950';
+  t.style.background='linear-gradient(180deg,#f7df9a,#d8ab4f)';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 2400);
+}
+function showScreen(id){
+  ['screen-lobby','screen-room','screen-game'].forEach(function(s){
+    var el = $(s);
+    if(s===id){ el.classList.remove('hidden'); el.classList.add('flex'); }
+    else { el.classList.add('hidden'); el.classList.remove('flex'); }
+  });
+}
+function makeDeck(){
+  var d = [];
+  for(var s=0;s<SUITS.length;s++) for(var v=0;v<RANKS.length;v++)
+    d.push({id:RANKS[v]+SUITS[s].sym, v:RANKS[v], vw:v, s:SUITS[s].sym, sw:SUITS[s].w, red:SUITS[s].red});
+  return d;
+}
+function shuffle(a){ for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+function sortHand(h){ h.sort(function(a,b){ return (a.vw-b.vw)||(a.sw-b.sw); }); return h; }
+function faceHTML(card, cls){
+  var red = card.red ? 'red' : '';
+  return '<div class="card '+red+' '+(cls||'')+'">'+
+    '<div class="corner tl"><span class="rank">'+card.v+'</span><span class="pip">'+card.s+'</span></div>'+
+    '<div class="bigpip">'+card.s+'</div>'+
+    '<div class="corner br"><span class="rank">'+card.v+'</span><span class="pip">'+card.s+'</span></div></div>';
+}
+function backHTML(cls){ return '<div class="card back '+(cls||'')+'"></div>'; }
+
+/* ================= LOBBY ================= */
+function initLobbyCounts(){
+  var box = $('lobby-counts'); box.innerHTML = '';
+  [4,5,6,7].forEach(function(n){
+    var b = document.createElement('button');
+    b.className = 'num-btn' + (n===lobbyCount ? ' on' : '');
+    b.textContent = n;
+    b.onclick = function(){ lobbyCount = n; initLobbyCounts(); renderRoomList(); };
+    box.appendChild(b);
+  });
+  $('lobby-hint').textContent = 'แต่ละคนได้ ' + HAND_SIZE[lobbyCount] + ' ใบ · ที่เหลือเป็นไพ่สำรอง';
+}
+var memRooms = null;
+function storeGet(){
+  if(memRooms!==null) return memRooms;
+  try { memRooms = localStorage.getItem('slave_rooms_v1') || '[]'; }
+  catch(e){ memRooms = '[]'; }
+  return memRooms;
+}
+function storeSet(v){
+  memRooms = v;
+  try { localStorage.setItem('slave_rooms_v1', v); } catch(e){}
+}
+function readRooms(){
+  try { var r = JSON.parse(storeGet()); return Array.isArray(r)?r:[]; } catch(e){ return []; }
+}
+function writeRooms(list){ storeSet(JSON.stringify(list)); }
+function makeCode(){
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', out = '';
+  for(var i=0;i<6;i++) out += chars[Math.floor(Math.random()*chars.length)];
+  return out;
+}
+function createRoom(){
+  myName = ($('inp-name').value || '').trim() || 'ผู้เล่น';
+  var list = readRooms();
+  var code = makeCode();
+  while(list.some(function(r){ return r.code===code; })) code = makeCode();
+  room = {code:code, max:lobbyCount, hostId:myId, seats:[{id:myId, name:myName, bot:false}]};
+  list.push(room); writeRooms(list);
+  broadcast({type:'rooms'});
+  renderRoom(); showScreen('screen-room');
+}
+function joinRoom(code){
+  code = (code || ($('inp-code').value||'')).trim().toUpperCase();
+  if(!code){ toast('ใส่รหัสห้อง'); return; }
+  var list = readRooms();
+  var found = null;
+  for(var i=0;i<list.length;i++) if(list[i].code===code) found = list[i];
+  if(!found){ toast('ไม่พบห้องรหัสนี้'); return; }
+  myName = ($('inp-name').value || '').trim() || 'ผู้เล่น';
+  if(found.seats.some(function(s){ return s.id===myId; })) found.seats = found.seats.filter(function(s){ return s.id!==myId; });
+  if(found.seats.length >= found.max){ toast('ห้องเต็มแล้ว'); return; }
+  found.seats.push({id:myId, name:myName, bot:false});
+  room = found;
+  writeRooms(list);
+  broadcast({type:'rooms'});
+  renderRoom(); showScreen('screen-room');
+}
+function quickPlay(){
+  myName = ($('inp-name').value || '').trim() || 'ผู้เล่น';
+  room = {code:'SOLO', max:lobbyCount, hostId:myId, seats:[{id:myId, name:myName, bot:false}]};
+  fillBots();
+  startGame();
+}
+function fillBots(){
+  if(!room) return room;
+  var bi = 0;
+  while(room.seats.length < room.max){
+    room.seats.push({id:'bot-'+room.seats.length+'-'+Date.now(), name:BOT_NAMES[bi % BOT_NAMES.length], bot:true});
+    bi++;
+  }
+  renderRoom();
+}
+function addBot(){
+  if(!room) return;
+  if(room.seats.length >= room.max){ toast('ห้องเต็มแล้ว'); return; }
+  room.seats.push({id:'bot-'+room.seats.length+'-'+Date.now(), name:BOT_NAMES[(room.seats.length-1) % BOT_NAMES.length], bot:true});
+  renderRoom();
+}
+function leaveRoom(){
+  if(room){
+    var list = readRooms();
+    list.forEach(function(r){ if(r.code===room.code) r.seats = r.seats.filter(function(s){ return s.id!==myId; }); });
+    writeRooms(list);
+    broadcast({type:'rooms'});
+  }
+  room = null;
+  showScreen('screen-lobby'); renderRoomList();
+}
+function backToLobby(){
+  gameActive = false; stopTimer();
+  showScreen('screen-lobby'); renderRoomList();
+}
+function copyCode(){
+  if(!room) return;
+  try {
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(room.code).then(function(){ toast('คัดลอกรหัสแล้ว: '+room.code); }, function(){ toast('รหัสห้อง: '+room.code); });
+      return;
+    }
+  } catch(e){}
+  try { window.prompt('รหัสห้องของคุณคือ', room.code); } catch(e){ toast('รหัสห้อง: '+room.code); }
+}
+function broadcast(msg){
+  msg.from = myId;
+  if(chan) try { chan.postMessage(msg); } catch(e){}
+}
+function renderRoom(){
+  if(!room) return;
+  $('room-code').textContent = room.code;
+  var box = $('room-slots'); box.innerHTML = '';
+  for(var i=0;i<room.max;i++){
+    var s = room.seats[i];
+    var d = document.createElement('div');
+    if(s){
+      d.className = 'room-slot filled';
+      d.innerHTML = '<div class="text-sm font-black px-2 py-1 rounded-lg bg-emerald-700/50 text-emerald-50">'+(s.bot?'BOT':(s.id===myId?'ME':'PL'))+'</div>'+
+        '<div class="text-xs font-semibold text-emerald-50 truncate w-full text-center px-1">'+esc(s.name)+'</div>'+
+        '<div class="text-[10px] '+(s.bot?'text-amber-200/80':'text-emerald-300/70')+'">'+(s.bot?'บอท':'ผู้เล่น')+(s.id===room.hostId?' · เจ้าของห้อง':'')+'</div>';
+    } else {
+      d.className = 'room-slot';
+      d.innerHTML = '<div class="text-emerald-300/40 text-xs">ว่าง</div>';
+    }
+    box.appendChild(d);
+  }
+  var humans = room.seats.filter(function(s){ return !s.bot; }).length;
+  var canStart = room.seats.length >= room.max;
+  $('btn-start').classList.toggle('opacity-50', !canStart);
+  $('room-hint').textContent = canStart
+    ? 'ผู้เล่นจริง '+humans+' คน · บอท '+(room.seats.length-humans)+' คน — กด “เริ่มเกม” ได้เลย'
+    : 'ต้องมีผู้เล่นครบ '+room.max+' คน (เติมบอทได้) จึงจะเริ่มเกมได้';
+}
+function renderRoomList(){
+  var box = $('room-list'); if(!box) return;
+  var list = readRooms().filter(function(r){ return r.seats.length < r.max; });
+  box.innerHTML = '';
+  if(!list.length){ box.innerHTML = '<div class="text-[11px] text-emerald-300/50 italic">ยังไม่มีห้องที่เปิดอยู่</div>'; return; }
+  list.forEach(function(r){
+    var b = document.createElement('button');
+    b.className = 'btn text-left px-3 py-2 rounded-xl bg-black/30 border border-emerald-700/40 hover:border-amber-400/50';
+    b.innerHTML = '<span class="font-bold text-amber-200 tracking-widest">'+esc(r.code)+'</span> '+
+      '<span class="text-[11px] text-emerald-200/80">'+r.seats.length+'/'+r.max+' คน</span>';
+    b.onclick = function(){ joinRoom(r.code); };
+    box.appendChild(b);
+  });
+}
+
+/* ================= กติกาไพ่ ================= */
+function detect5(cards){
+  var sameSuit = true, i;
+  for(i=1;i<cards.length;i++) if(cards[i].s!==cards[0].s){ sameSuit=false; break; }
+  var ranks = cards.map(function(c){ return c.vw; }).sort(function(a,b){ return a-b; });
+  var consec = true;
+  for(i=1;i<ranks.length;i++) if(ranks[i]!==ranks[i-1]+1){ consec=false; break; }
+  if(sameSuit && consec){
+    var top = ranks[ranks.length-1];
+    var tc = cards.filter(function(c){ return c.vw===top; })[0];
+    return {cat: top===12 ? T.royal : T.sf, rank:top, suit:tc.sw};
+  }
+  if(sameSuit){
+    var tf = ranks[ranks.length-1];
+    var tcf = cards.filter(function(c){ return c.vw===tf; })[0];
+    return {cat:T.flush, rank:tf, suit:tcf.sw};
+  }
+  var counts = {};
+  cards.forEach(function(c){ counts[c.vw]=(counts[c.vw]||0)+1; });
+  var quad = null;
+  for(var k in counts) if(counts[k]===4) quad = Number(k);
+  if(quad!==null){
+    var ms = -1;
+    cards.forEach(function(c){ if(c.vw===quad && c.sw>ms) ms=c.sw; });
+    return {cat:T.four, rank:quad, suit:ms};
+  }
+  if(consec){
+    var ts = ranks[ranks.length-1];
+    var tcs = cards.filter(function(c){ return c.vw===ts; })[0];
+    return {cat:T.straight, rank:ts, suit:tcs.sw};
+  }
+  return null;
+}
+function classify(cards){
+  var n = cards.length;
+  if(n===1) return {cat:T.single, rank:cards[0].vw, suit:cards[0].sw};
+  if(n===2){
+    if(cards[0].vw!==cards[1].vw) return null;
+    return {cat:T.pair, rank:cards[0].vw, suit:Math.max(cards[0].sw,cards[1].sw)};
+  }
+  if(n===3){
+    if(cards[0].vw!==cards[1].vw || cards[1].vw!==cards[2].vw) return null;
+    return {cat:T.triple, rank:cards[0].vw, suit:Math.max(cards[0].sw,Math.max(cards[1].sw,cards[2].sw))};
+  }
+  if(n===4){
+    if(!(cards[0].vw===cards[1].vw && cards[1].vw===cards[2].vw && cards[2].vw===cards[3].vw)) return null;
+    return {cat:T.quad, rank:cards[0].vw, suit:Math.max(cards[0].sw,Math.max(cards[1].sw,Math.max(cards[2].sw,cards[3].sw)))};
+  }
+  if(n===5) return detect5(cards);
+  return null;
+}
+function compareSet(a,b){
+  var sa=SIZE_OF[a.cat], sb=SIZE_OF[b.cat];
+  if(sa===5 && sb===5 && FIVE_ORDER[a.cat]!==FIVE_ORDER[b.cat]) return FIVE_ORDER[a.cat]-FIVE_ORDER[b.cat];
+  if(a.rank!==b.rank) return a.rank-b.rank;
+  return a.suit-b.suit;
+}
+function canBeat(det){
+  if(!table) return {ok:true};
+  var nd=SIZE_OF[det.cat], nt=SIZE_OF[table.cat];
+  if(nd===nt){
+    if(nt===5) return compareSet(det, table)>0 ? {ok:true}
+      : {ok:false, msg:'ชุด 5 ใบต้องเหนือกว่า: เรียง < โฟลช์ < สี่เหลี่ยม+1 < เรียงโฟลช์ < รอยัลฟลัช'};
+    if(det.cat!==table.cat) return {ok:false, msg:'ต้องลงชุดเดียวกับบนสนาม ('+TYPE_LABEL[table.cat]+')'};
+    return compareSet(det, table)>0 ? {ok:true} : {ok:false, msg:'ไพ่ที่เลือกไม่ใหญ่กว่าไพ่บนสนาม'};
+  }
+  if(allowPlus2 && nd===nt+2 && nd<=5) return {ok:true};
+  return {ok:false, msg:'บนสนามเป็น'+TYPE_LABEL[table.cat]+' — ตอบได้จำนวนเท่ากัน หรือมากกว่า 2 ใบ (3 ตบ 1 · 4 ตบ 2 · 5 ตบ 3)'};
+}
+
+/* ================= AI ================= */
+function enumerateSets(hand){
+  var out = [], i;
+  for(i=0;i<hand.length;i++) out.push({cards:[hand[i]], idxs:[i], cat:T.single, rank:hand[i].vw, suit:hand[i].sw});
+  var groups = {};
+  for(i=0;i<hand.length;i++){ (groups[hand[i].vw]=groups[hand[i].vw]||[]).push(i); }
+  for(var rk in groups){
+    var g = groups[rk], a,b,c,d;
+    if(g.length>=2){
+      for(a=0;a<g.length;a++) for(b=a+1;b<g.length;b++){
+        var pc=[hand[g[a]],hand[g[b]]];
+        out.push({cards:pc, idxs:[g[a],g[b]], cat:T.pair, rank:pc[0].vw, suit:Math.max(pc[0].sw,pc[1].sw)});
+      }
+    }
+    if(g.length>=3){
+      for(a=0;a<g.length;a++) for(b=a+1;b<g.length;b++) for(c=b+1;c<g.length;c++){
+        var tc=[hand[g[a]],hand[g[b]],hand[g[c]]];
+        out.push({cards:tc, idxs:[g[a],g[b],g[c]], cat:T.triple, rank:tc[0].vw, suit:Math.max(tc[0].sw,Math.max(tc[1].sw,tc[2].sw))});
+      }
+    }
+    if(g.length>=4){
+      for(a=0;a<g.length-3;a++) for(b=a+1;b<g.length-2;b++) for(c=b+1;c<g.length-1;c++) for(d=c+1;d<g.length;d++){
+        var qc=[hand[g[a]],hand[g[b]],hand[g[c]],hand[g[d]]];
+        out.push({cards:qc, idxs:[g[a],g[b],g[c],g[d]], cat:T.quad, rank:qc[0].vw, suit:Math.max(qc[0].sw,Math.max(qc[1].sw,Math.max(qc[2].sw,qc[3].sw)))});
+      }
+    }
+  }
+  if(hand.length>=5){
+    for(var p1=0;p1<hand.length-4;p1++)
+    for(var p2=p1+1;p2<hand.length-3;p2++)
+    for(var p3=p2+1;p3<hand.length-2;p3++)
+    for(var p4=p3+1;p4<hand.length-1;p4++)
+    for(var p5=p4+1;p5<hand.length;p5++){
+      var five=[hand[p1],hand[p2],hand[p3],hand[p4],hand[p5]];
+      var det=detect5(five);
+      if(det) out.push({cards:five, idxs:[p1,p2,p3,p4,p5], cat:det.cat, rank:det.rank, suit:det.suit});
+    }
+  }
+  return out;
+}
+function setDet(s){ return {cat:s.cat, rank:s.rank, suit:s.suit}; }
+function legalSets(hand){
+  var all = enumerateSets(hand);
+  if(!table) return all;
+  var ok = [];
+  all.forEach(function(s){ if(canBeat(setDet(s)).ok) ok.push(s); });
+  return ok;
+}
+function aiChoose(){
+  var me = players[currentTurn];
+  var cands = enumerateSets(me.hand);
+  if(!table){
+    var best = null;
+    if(me.hand.length<=4){
+      cands.forEach(function(s){
+        if(SIZE_OF[s.cat]>1 && (!best || SIZE_OF[s.cat]>SIZE_OF[best.cat] ||
+          (SIZE_OF[s.cat]===SIZE_OF[best.cat] && compareSet(s,best)>0))) best=s;
+      });
+      if(best) return best;
+    }
+    cands.forEach(function(s){ if(s.cat===T.triple && me.hand.length<=9){ if(!best||compareSet(s,best)<0) best=s; } });
+    if(!best) cands.forEach(function(s){ if(s.cat===T.pair && me.hand.length<=6){ if(!best||compareSet(s,best)<0) best=s; } });
+    if(!best) cands.forEach(function(s){ if(s.cat===T.single){ if(!best||compareSet(s,best)<0) best=s; } });
+    return best;
+  }
+  var playable = [];
+  cands.forEach(function(s){ if(canBeat(setDet(s)).ok) playable.push(s); });
+  if(!playable.length) return null;
+  var nT = SIZE_OF[table.cat];
+  var same = playable.filter(function(s){ return SIZE_OF[s.cat]===nT; });
+  var pool = same.length ? same : playable;
+  pool.sort(function(x,y){
+    if(SIZE_OF[x.cat]!==SIZE_OF[y.cat]) return SIZE_OF[x.cat]-SIZE_OF[y.cat];
+    return compareSet(x,y);
+  });
+  return pool[0];
+}
+function bestPlayerSet(){
+  var legal = legalSets(players[0].hand);
+  if(!legal.length) return null;
+  if(!table){
+    var best = null;
+    legal.forEach(function(s){ if(s.cat===T.single){ if(!best||compareSet(s,best)<0) best=s; } });
+    return best;
+  }
+  legal.sort(function(x,y){
+    if(SIZE_OF[x.cat]!==SIZE_OF[y.cat]) return SIZE_OF[x.cat]-SIZE_OF[y.cat];
+    return compareSet(x,y);
+  });
+  return legal[0];
+}
+
+/* ================= เกม ================= */
+function startGame(){
+  if(!room){
+    var n = lobbyCount || 4;
+    room = {code:'SOLO', max:n, hostId:myId, seats:[{id:myId, name:myName||'ผู้เล่น', bot:false}]};
+    fillBots();
+  }
+  if(room.seats.length < room.max) fillBots();
+  players = room.seats.map(function(s, i){
+    return {id:s.id, name:s.name, bot:!!s.bot, human:s.id===myId, hand:[], played:0, rank:null, wins:0, score:0};
+  });
+  // เรียงลำดับ: คุณอยู่ล่างกลาง คนอื่นเรียงทวนเข็มนาฬิกา
+  var meIdx = players.findIndex(function(p){ return p.human; });
+  if(meIdx<0) meIdx = 0;
+  players = [players[meIdx]].concat(players.filter(function(_,i){ return i!==meIdx; }));
+  showScreen('screen-game');
+  roundNo = 1;
+  players.forEach(function(p){ p.wins=0; p.score=0; });
+  startRound();
+}
+function startRound(){
+  deck = shuffle(makeDeck());
+  stock = [];
+  table = null; lastPlayer = -1; passStreak = 0; selected = []; gameActive = true;
+  var per = HAND_SIZE[players.length] || 8;
+  players.forEach(function(p){ p.hand=[]; p.played=0; p.rank=null; p.lastPlay=null; });
+  for(var i=0;i<per;i++) for(var j=0;j<players.length;j++){
+    var c = deck.pop();
+    if(!c) break;
+    players[j].hand.push(c);
+  }
+  while(deck.length) stock.push(deck.pop());
+  players.forEach(function(p){ sortHand(p.hand); });
+  var starter = 0;
+  players.forEach(function(p, idx){
+    if(p.hand.some(function(c){ return c.v==='3' && c.s==='♣'; })) starter = idx;
+  });
+  currentTurn = starter;
+  addLog('รอบที่ '+roundNo+' · แจกไพ่คนละ '+per+' ใบ ('+players.length+' คน, ไพ่สำรอง '+stock.length+' ใบ) · '+players[starter].name+' ถือ ♣3 เริ่มก่อน');
+  $('h-round').textContent = roundNo;
+  render(); startTurn();
+}
+function playCards(idx, set){
+  var p = players[idx];
+  var cards = set.cards;
+  set.idxs.slice().sort(function(a,b){ return b-a; }).forEach(function(i){ p.hand.splice(i,1); });
+  sortHand(p.hand);
+  p.lastPlay = cards; p.played += cards.length;
+  table = {cat:set.cat, rank:set.rank, suit:set.suit, cards:cards, owner:idx};
+  lastPlayer = idx; passStreak = 0;
+  addLog(p.name+' ลง'+TYPE_LABEL[set.cat]+': ['+cards.map(function(c){ return c.v+c.s; }).join(', ')+']');
+  if(p.hand.length===0){
+    p.rank = players.filter(function(x){ return x.rank!==null; }).length + 1;
+    p.wins += 1;
+    addLog('*** '+p.name+' ไพ่หมดมือ — อันดับที่ '+p.rank);
+  }
+}
+function passTurn(idx){
+  addLog(players[idx].name+' ขอผ่าน (Pass)');
+  passStreak++;
+}
+function clearTable(){
+  var who = (lastPlayer>=0 && players[lastPlayer].hand.length>0) ? players[lastPlayer].name : 'ผู้เล่นที่ยังมีไพ่';
+  addLog('ทุกคนผ่าน — เคลียร์สนาม! '+who+' เริ่มรอบใหม่ได้ทันที');
+  table = null; passStreak = 0;
+  players.forEach(function(p){ p.lastPlay = null; });
+}
+function nextTurn(){
+  if(!gameActive) return;
+  var n = players.length, i, idx = -1;
+  for(i=1;i<=n;i++){
+    var t = (currentTurn+i)%n;
+    if(players[t].hand.length>0){ idx = t; break; }
+  }
+  if(idx<0){ endRound(); return; }
+  currentTurn = idx;
+  var active = players.filter(function(p){ return p.hand.length>0; }).length;
+  if(active<=1){ endRound(); return; }
+  if(table && passStreak >= active-1){
+    var leader = (lastPlayer>=0 && players[lastPlayer].hand.length>0) ? lastPlayer : currentTurn;
+    clearTable();
+    currentTurn = leader;
+  }
+  selected = [];
+  render(); startTurn();
+}
+function startTurn(){
+  if(!gameActive) return;
+  stopTimer();
+  var p = players[currentTurn];
+  if(!p || p.hand.length===0){ nextTurn(); return; }
+  turnLeft = TURN_SECONDS;
+  updateTurnBar();
+  render();
+  if(p.human){
+    turnTimerId = setInterval(tick, 100);
+  } else {
+    setTimeout(function(){ aiAct(currentTurn); }, 700);
+  }
+}
+function tick(){
+  if(!gameActive) return;
+  turnLeft -= 0.1;
+  if(turnLeft<=0){ turnLeft=0; stopTimer(); autoAct(currentTurn); return; }
+  updateTurnBar();
+}
+function updateTurnBar(){
+  var bar = $('turn-bar'); if(!bar) return;
+  bar.style.width = Math.max(0,(turnLeft/TURN_SECONDS)*100)+'%';
+}
+function stopTimer(){ if(turnTimerId){ clearInterval(turnTimerId); turnTimerId = null; } }
+function aiAct(idx){
+  if(!gameActive) return;
+  var move = aiChoose();
+  if(move){ playCards(idx, move); }
+  else { passTurn(idx); }
+  nextTurn();
+}
+function autoAct(idx){
+  if(!gameActive) return;
+  if(idx!==0){ aiAct(idx); return; }
+  if(table){ playerPass(); }
+  else {
+    var set = bestPlayerSet();
+    if(set) playerPlaySet(set);
+    else if(stock.length) playerOpenStock();
+    else { addLog('เวลาหมด — ไม่มีไพ่เล่น ข้ามตา'); nextTurn(); }
+  }
+}
+
+/* ================= ปุ่มผู้เล่น ================= */
+function toggleSelect(i){
+  if(currentTurn!==0 || !gameActive) return;
+  var pos = selected.indexOf(i);
+  if(pos>-1) selected.splice(pos,1);
+  else { if(selected.length>=5){ toast('เลือกได้สูงสุด 5 ใบ'); return; } selected.push(i); }
+  render();
+}
+function playerPlay(){
+  if(currentTurn!==0 || !gameActive) return;
+  if(!selected.length){ toast('เลือกไพ่ในมือก่อน'); return; }
+  var cards = selected.map(function(i){ return players[0].hand[i]; });
+  sortHand(cards);
+  var det = classify(cards);
+  if(!det){ toast('ไพ่ที่เลือกไม่ใช่ชุดที่เล่นได้'); return; }
+  var chk = canBeat(det);
+  if(!chk.ok){ toast(chk.msg); return; }
+  playerPlaySet({cards:cards, cat:det.cat, rank:det.rank, suit:det.suit});
+}
+function playerPlaySet(set){
+  if(currentTurn!==0 || !gameActive) return;
+  var chosen = set.cards, idxs = [];
+  players[0].hand.forEach(function(c,i){ if(chosen.indexOf(c)>-1) idxs.push(i); });
+  selected = []; stopTimer();
+  playCards(0, {cards:chosen, idxs:idxs, cat:set.cat, rank:set.rank, suit:set.suit});
+  nextTurn();
+}
+function playerAuto(){
+  if(currentTurn!==0 || !gameActive) return;
+  var set = bestPlayerSet();
+  if(!set){ toast('ไม่มีไพ่ที่ลงได้ตอนนี้ — ลองเปิดไพ่สำรอง'); return; }
+  selected = set.idxs.slice().sort(function(a,b){ return a-b; });
+  render();
+}
+function playerPass(){
+  if(currentTurn!==0 || !gameActive) return;
+  if(!table){ toast('คุณเริ่มรอบนี้ ต้องลงไพ่ ไม่สามารถผ่านได้'); return; }
+  stopTimer(); selected = [];
+  passTurn(0); nextTurn();
+}
+function playerOpenStock(){
+  if(currentTurn!==0 || !gameActive) return;
+  if(!stock.length){ toast('ไพ่สำรองหมดแล้ว'); return; }
+  var c = stock.pop();
+  players[0].hand.push(c); sortHand(players[0].hand);
+  addLog('คุณเปิดไพ่สำรอง: '+c.v+c.s+' (เหลือ '+stock.length+' ใบ)');
+  render();
+}
+
+/* ================= จบรอบ ================= */
+function endRound(){
+  gameActive = false; stopTimer();
+  var maxRemain = 0;
+  players.forEach(function(p){ if(p.hand.length>maxRemain) maxRemain=p.hand.length; });
+  var slave = null;
+  players.forEach(function(p){ if(p.rank!==1 && p.hand.length===maxRemain) slave = p; });
+  players.forEach(function(p){
+    p.roundBase = (maxRemain - p.hand.length)*2;
+    p.roundWinBonus = 5*p.wins;
+    p.slaveLeft = (slave && p.rank===1) ? slave.hand.length : 0;
+    p.score += p.roundBase + p.roundWinBonus;
+  });
+  var ranked = players.slice().sort(function(a,b){ return (a.rank||99)-(b.rank||99); });
+  var roles = ['King (ราชา)','Queen (ราชินี)','People (สามัญชน)','Slave (สลาฟ)'];
+  var html = '';
+  ranked.forEach(function(p,i){
+    var cls = i===0 ? 'bg-amber-950/60 border-amber-500/60 text-amber-100'
+           : (i===ranked.length-1 ? 'bg-rose-950/40 border-rose-700/40 text-rose-100'
+           : 'bg-black/25 border-emerald-700/40 text-emerald-50');
+    html += '<div class="px-3 py-2 rounded-xl border text-sm '+cls+'">'+
+      '<div class="flex justify-between items-center gap-2">'+
+      '<span class="font-semibold truncate">'+(i+1)+'. '+esc(p.name)+'</span>'+
+      '<span class="text-[11px] flex items-center gap-1.5 shrink-0">'+
+      '<span class="px-2 py-0.5 rounded bg-black/40">'+roles[Math.min(i,3)]+'</span>'+
+      '<span class="px-2 py-0.5 rounded bg-black/40">เหลือ '+p.hand.length+'</span>'+
+      '<span class="px-2 py-0.5 rounded bg-black/40 text-amber-200 font-bold">'+p.score+'</span></span></div>'+
+      '<div class="text-[10px] opacity-85 mt-1">ฐาน '+(p.roundBase||0)+' · รอบที่ชนะ +'+(p.roundWinBonus||0)+
+      (p.slaveLeft?' · ได้จากสลางที่เหลือ '+p.slaveLeft+' ใบ (x2)':'')+'</div></div>';
+  });
+  $('ranking-list').innerHTML = html;
+  $('round-sub').textContent = 'รอบที่ '+roundNo+' · แต้มสะสมทั้งหมด';
+  $('round-modal').classList.remove('hidden');
+  $('round-modal').classList.add('flex');
+  render();
+}
+function nextRound(){
+  $('round-modal').classList.add('hidden');
+  $('round-modal').classList.remove('flex');
+  roundNo++;
+  startRound();
+}
+function closeRoundModal(){
+  $('round-modal').classList.add('hidden');
+  $('round-modal').classList.remove('flex');
+}
+
+/* ================= UI ================= */
+function addLog(msg){
+  var box = $('game-log');
+  var d = document.createElement('div');
+  d.className = 'logline text-emerald-50/85';
+  d.textContent = msg;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+function openRules(){ $('rules-modal').classList.remove('hidden'); $('rules-modal').classList.add('flex'); paintToggle(); }
+function closeRules(){ $('rules-modal').classList.add('hidden'); $('rules-modal').classList.remove('flex'); }
+function toggleSpecial(){ allowPlus2 = !allowPlus2; paintToggle(); addLog('โหมดตอบได้มากกว่า 2 ใบ: '+(allowPlus2?'เปิด':'ปิด')); }
+function paintToggle(){
+  var b = $('toggle-special'); if(!b) return;
+  b.style.background = allowPlus2 ? 'linear-gradient(180deg,#f7df9a,#d8ab4f)' : '#14523f';
+  b.innerHTML = '<span style="position:absolute;top:3px;left:'+(allowPlus2?'31px':'3px')+';width:26px;height:26px;border-radius:999px;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.4);transition:left .18s ease"></span>';
+  b.style.position='relative';
+}
+function render(){
+  if(!players.length) return;
+  var me = players[0];
+  /* มือผู้เล่น */
+  var handBox = $('player-hand');
+  handBox.innerHTML = '';
+  if(!me.hand.length){
+    handBox.innerHTML = '<div class="text-sm text-emerald-200/70 italic px-2 py-4">คุณไพ่หมดมือแล้ว — รอจบรอบ</div>';
+  } else {
+    me.hand.forEach(function(card,i){
+      var isSel = selected.indexOf(i)>-1;
+      var el = document.createElement('div');
+      el.className = 'deal';
+      el.style.animationDelay = (i*30)+'ms';
+      el.innerHTML = faceHTML(card, 'playable '+(isSel?'sel':''));
+      el.onclick = function(){ toggleSelect(i); };
+      handBox.appendChild(el);
+    });
+  }
+  $('player-count').textContent = 'ไพ่ในมือ: '+me.hand.length+' ใบ';
+  $('player-score').textContent = me.score;
+  $('player-wins').textContent = me.wins;
+  $('h-score').textContent = me.score;
+
+  /* ที่นั่งผู้เล่น (แถวด้านบน) */
+  var seats = $('seats'); seats.innerHTML = '';
+  players.forEach(function(p,i){
+    var d = document.createElement('div');
+    d.className = 'seat' + (currentTurn===i && gameActive ? ' active' : '');
+    var backs = '';
+    var show = Math.min(p.hand.length, 3);
+    for(var b=0;b<show;b++) backs += backHTML('sm');
+    var tag = p.human ? 'คุณ' : (p.bot ? 'บอท' : 'ผู้เล่น');
+    d.innerHTML = '<div class="avatar">'+(p.human?'ME':(p.bot?'BOT':'PL'))+'</div>'+
+      '<div class="info">'+
+        '<div class="nm">'+esc(p.name)+'</div>'+
+        '<div class="ct">'+p.hand.length+' ใบ · '+tag+'</div>'+
+        '<div class="mini">'+backs+'</div>'+
+      '</div>';
+    seats.appendChild(d);
+  });
+
+  /* สนามกลาง */
+  var tbl = $('table-cards'); tbl.innerHTML = '';
+  if(table){
+    table.cards.forEach(function(c){ tbl.innerHTML += faceHTML(c,'lg pop'); });
+    var hi = table.cards.slice().sort(function(a,b){ return (a.vw-b.vw)||(a.sw-b.sw); });
+    $('table-type').textContent = TYPE_LABEL[table.cat] + ' · สูงสุด ' + hi[hi.length-1].v;
+    $('table-owner').textContent = 'โดย ' + players[table.owner].name;
+  } else {
+    tbl.innerHTML = '<div class="text-xs text-emerald-200/60 italic">สนามว่าง — ลงไพ่รูปแบบใดก็ได้</div>';
+    $('table-type').textContent = 'ยังไม่มีการลงไพ่';
+    $('table-owner').textContent = '';
+  }
+
+  /* ตารางนับ */
+  var cg = $('counter-grid'); cg.innerHTML = '';
+  players.forEach(function(p){
+    cg.innerHTML += '<div class="rounded-lg px-1 py-2 text-center" style="background:rgba(0,0,0,.3);border:1px solid rgba(227,189,104,.2)">'+
+      '<div class="text-[9px] text-emerald-300/80 truncate">'+esc(p.name.slice(0,7))+'</div>'+
+      '<div class="text-sm font-bold text-amber-200">'+p.played+'</div></div>';
+  });
+
+  /* ปุ่ม + สถานะ */
+  var controls = $('action-controls');
+  var pill = $('turn-pill');
+  var canPlay = currentTurn===0 && gameActive;
+  if(canPlay){
+    controls.classList.remove('hidden'); controls.classList.add('flex');
+    var noLegal = !bestPlayerSet();
+    $('btn-stock').classList.toggle('hidden', !(noLegal && stock.length>0));
+    pill.textContent = 'ตาของคุณ! (เหลือ '+Math.ceil(turnLeft)+' วิ) · เลือกไพ่แล้วกดลงไพ่ หรือผ่าน';
+    pill.classList.add('pulse-turn');
+    pill.style.background='linear-gradient(180deg,#f7df9a,#d8ab4f)';
+    pill.style.color='#23300f';
+  } else {
+    controls.classList.add('hidden'); controls.classList.remove('flex');
+    pill.classList.remove('pulse-turn');
+    pill.style.background=''; pill.style.color='';
+    pill.textContent = gameActive ? ('ตาของ '+players[currentTurn].name+' กำลังคิด…') : 'จบรอบแล้ว';
+  }
+
+  var selCards = selected.map(function(i){ return me.hand[i]; });
+  var det = selCards.length ? classify(selCards) : null;
+  $('selection-info').innerHTML = selCards.length
+    ? ('เลือก '+selCards.length+' ใบ · '+(det ? TYPE_LABEL[det.cat] : 'ยังไม่ใช่ชุดที่เล่นได้')+' · Space วาง · N ผ่าน')
+    : 'เลือกไพ่ 1 / 2 / 3 / 4 / 5 ใบ — Space วาง · N ผ่าน · H กติกา';
+}
+
+/* ================= คีย์ลัด ================= */
+document.addEventListener('keydown', function(e){
+  var k = e.key.toLowerCase();
+  if(k===' '){ e.preventDefault(); if(currentTurn===0 && gameActive) playerPlay(); }
+  else if(k==='n'){ if(currentTurn===0 && gameActive) playerPass(); }
+  else if(k==='h'){ openRules(); }
+  else if(k==='a'){ if(currentTurn===0 && gameActive) playerAuto(); }
+  else if(k==='escape'){ closeRules(); }
+});
+
+/* ================= เริ่ม ================= */
+window.addEventListener('load', function(){
+  initLobbyCounts();
+  paintToggle();
+  renderRoomList();
+  $('game-log').innerHTML = '';
+  addLog('ยินดีต้อนรับสู่เกมไพ่สลาฟ');
+  if(chan) chan.onmessage = function(ev){
+    var m = ev.data || {};
+    if(m.type==='rooms'){ renderRoomList(); }
+  };
+  setInterval(renderRoomList, 4000);
+});
+</script>
+</body>
+</html>
